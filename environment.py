@@ -2,6 +2,7 @@ import gym
 from chainer.links import VGG16Layers
 from PIL import ImageDraw
 from PIL.Image import LANCZOS
+import numpy as np
 
 
 class TextLocEnv(gym.Env):
@@ -25,7 +26,7 @@ class TextLocEnv(gym.Env):
         self.image = image
         self.true_bboxes = true_bboxes
         self.history = []
-        self.bbox = (0, 0, image.width, image.height)
+        self.bbox = np.array([0, 0, image.width, image.height])
         self.state = self.compute_state()
         self.done = False
 
@@ -48,36 +49,45 @@ class TextLocEnv(gym.Env):
         return 0
 
     def up(self):
-        pass
+        self.adjust_bbox(np.array([0, -1, 0, -1]))
 
     def down(self):
-        pass
+        self.adjust_bbox(np.array([0, 1, 0, 1]))
 
     def left(self):
-        pass
+        self.adjust_bbox(np.array([-1, 0, -1, 0]))
 
     def right(self):
-        pass
+        self.adjust_bbox(np.array([1, 0, 1, 0]))
 
     def zoom_in(self):
-        pass
+        self.adjust_bbox(np.array([1, 1, -1, -1]))
 
     def zoom_out(self):
-        pass
+        self.adjust_bbox(np.array([-1, -1, 1, 1]))
 
     def wider(self):
-        pass
+        self.adjust_bbox(np.array([-1, 0, 1, 0]))
 
     def taller(self):
-        pass
+        self.adjust_bbox(np.array([0, -1, 0, 1]))
 
     def trigger(self):
-        pass
+        self.done = True
+
+    def adjust_bbox(self, directions):
+        ah = self.alpha * (self.bbox[3] - self.bbox[1])
+        aw = self.alpha * (self.bbox[2] - self.bbox[0])
+
+        adjustments = np.array([aw, ah, aw, ah])
+        delta = directions * adjustments
+
+        self.bbox = self.bbox + delta
 
     def reset(self):
         """Reset the environment to its initial state (the bounding box covers the entire image"""
         self.history = []
-        self.bbox = (0, 0, self.image.width, self.image.height)
+        self.bbox = np.array([0, 0, self.image.width, self.image.height])
         self.state = self.compute_state()
 
         return self.state
@@ -86,7 +96,7 @@ class TextLocEnv(gym.Env):
         """Render the current state"""
         copy = self.image.copy()
         draw = ImageDraw.Draw(copy)
-        draw.rectangle(self.bbox, outline=(255, 255, 255))
+        draw.rectangle(self.bbox.tolist(), outline=(255, 255, 255))
         copy.show()
 
     def get_warped_bbox_contents(self):
