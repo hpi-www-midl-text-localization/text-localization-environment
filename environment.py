@@ -31,6 +31,7 @@ class TextLocEnv(gym.Env):
         self.true_bboxes = true_bboxes
         self.history = []
         self.bbox = np.array([0, 0, image.width, image.height])
+        self.iou = 0
         self.state = self.compute_state()
         self.done = False
 
@@ -42,10 +43,11 @@ class TextLocEnv(gym.Env):
             info - any additional info"""
         assert self.action_space.contains(action), "%r (%s) is an invalid action" % (action, type(action))
 
-        old_bbox = self.bbox
         self.action_set[action]()
 
-        reward = self.compute_reward(old_bbox)
+        new_iou = self.compute_best_iou()
+        reward = np.sign(new_iou - self.iou)
+        self.iou = new_iou
 
         self.history.insert(0, self.to_one_hot(action))
 
@@ -56,8 +58,33 @@ class TextLocEnv(gym.Env):
 
         return self.state, reward, self.done, {}
 
-    def compute_reward(self, old_bbox):
-        return 0
+    def compute_best_iou(self):
+        max_iou = 0
+
+        for box in self.true_bboxes:
+            max_iou = max(max_iou, self.compute_iou(box))
+
+        return max_iou
+
+    def compute_iou(self, other_bbox):
+        intersection = self.compute_intersection(other_bbox)
+
+        area_1 = (self.bbox[2] - self.bbox[0]) * (self.bbox[3] - self.bbox[1])
+        area_2 = (other_bbox[2] - other_bbox[0]) * (other_bbox[3] - other_bbox[1])
+        union = area_1 + area_2 - intersection
+
+        return intersection / union
+
+    def compute_intersection(self, other_bbox):
+        left = max(self.bbox[0], other_bbox[0])
+        top = max(self.bbox[1], other_bbox[1])
+        right = min(self.bbox[2], other_bbox[2])
+        bottom = min(self.bbox[3], other_bbox[3])
+
+        if right < left or bottom < top:
+            return 0
+
+        return (right - left) * (bottom - top)
 
     def up(self):
         self.adjust_bbox(np.array([0, -1, 0, -1]))
