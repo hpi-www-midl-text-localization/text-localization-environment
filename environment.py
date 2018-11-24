@@ -1,4 +1,5 @@
 import gym
+from gym import spaces
 from chainer.links import VGG16Layers
 from PIL import ImageDraw
 from PIL.Image import LANCZOS
@@ -7,9 +8,12 @@ import numpy as np
 
 class TextLocEnv(gym.Env):
 
+    HISTORY_LENGTH = 10
+
     def __init__(self, image, true_bboxes):
         self.alpha = 0.2
         self.feature_extractor = VGG16Layers()
+        self.action_space = spaces.Discrete(9)
         self.action_set = {0: self.up,
                            1: self.down,
                            2: self.left,
@@ -36,12 +40,19 @@ class TextLocEnv(gym.Env):
             reward - the reward,
             done - whether a terminal state was reached,
             info - any additional info"""
+        assert self.action_space.contains(action), "%r (%s) is an invalid action" % (action, type(action))
+
         old_bbox = self.bbox
         self.action_set[action]()
 
         reward = self.compute_reward(old_bbox)
 
-        self.state = self.compute_state()
+        self.history.insert(0, self.to_one_hot(action))
+
+        if len(self.history) > TextLocEnv.HISTORY_LENGTH:
+            self.history.pop()
+
+        self.state = self.compute_state(), self.history
 
         return self.state, reward, self.done, {}
 
@@ -76,8 +87,8 @@ class TextLocEnv(gym.Env):
         self.done = True
 
     def adjust_bbox(self, directions):
-        ah = self.alpha * (self.bbox[3] - self.bbox[1])
-        aw = self.alpha * (self.bbox[2] - self.bbox[0])
+        ah = round(self.alpha * (self.bbox[3] - self.bbox[1]))
+        aw = round(self.alpha * (self.bbox[2] - self.bbox[0]))
 
         adjustments = np.array([aw, ah, aw, ah])
         delta = directions * adjustments
@@ -89,6 +100,7 @@ class TextLocEnv(gym.Env):
         self.history = []
         self.bbox = np.array([0, 0, self.image.width, self.image.height])
         self.state = self.compute_state()
+        self.done = False
 
         return self.state
 
@@ -104,8 +116,17 @@ class TextLocEnv(gym.Env):
         return croppped.resize((224, 224), LANCZOS)
 
     def compute_state(self):
+        return self.extract_features(), self.history
+
+    def extract_features(self):
         """Compute the state from the image, the bounding box and the action history"""
         warped = self.get_warped_bbox_contents()
         feature = self.feature_extractor.extract([warped], layers=["fc7"])["fc7"]
 
         return feature[0]
+
+    def to_one_hot(self, action):
+        line = np.zeros(self.action_space.n, np.bool)
+        line[action] = 1
+
+        return line
