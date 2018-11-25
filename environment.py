@@ -120,7 +120,13 @@ class TextLocEnv(gym.Env):
         adjustments = np.array([aw, ah, aw, ah])
         delta = directions * adjustments
 
-        self.bbox = self.bbox + delta
+        new_box = self.bbox + delta
+        new_box[0] = max(new_box[0], 0)
+        new_box[1] = max(new_box[1], 0)
+        new_box[2] = min(new_box[2], self.image.width)
+        new_box[3] = min(new_box[3], self.image.height)
+
+        self.bbox = new_box
 
     def reset(self):
         """Reset the environment to its initial state (the bounding box covers the entire image"""
