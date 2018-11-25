@@ -12,6 +12,8 @@ class TextLocEnv(gym.Env):
 
     def __init__(self, image, true_bboxes):
         self.alpha = 0.2
+        self.tau = 0.6
+        self.eta = 3.0
         self.feature_extractor = VGG16Layers()
         self.action_space = spaces.Discrete(9)
         self.action_set = {0: self.up,
@@ -29,7 +31,7 @@ class TextLocEnv(gym.Env):
 
         self.image = image
         self.true_bboxes = true_bboxes
-        self.history = []
+        self.history = self.create_empty_history()
         self.bbox = np.array([0, 0, image.width, image.height])
         self.iou = 0
         self.state = self.compute_state()
@@ -45,18 +47,31 @@ class TextLocEnv(gym.Env):
 
         self.action_set[action]()
 
-        new_iou = self.compute_best_iou()
-        reward = np.sign(new_iou - self.iou)
-        self.iou = new_iou
+        reward = 0
+        if self.action_set[action] == self.trigger:
+            if self.iou >= self.tau:
+                reward = self.eta
+            else:
+                reward = -self.eta
+        else:
+            new_iou = self.compute_best_iou()
+            reward = np.sign(new_iou - self.iou)
+            self.iou = new_iou
 
         self.history.insert(0, self.to_one_hot(action))
 
         if len(self.history) > TextLocEnv.HISTORY_LENGTH:
             self.history.pop()
 
-        self.state = self.compute_state(), self.history
+        self.state = self.compute_state()
 
         return self.state, reward, self.done, {}
+
+    def create_empty_history(self):
+        flat_history = np.repeat([False], TextLocEnv.HISTORY_LENGTH * self.action_space.n)
+        history = flat_history.reshape((TextLocEnv.HISTORY_LENGTH, self.action_space.n))
+
+        return history.tolist()
 
     def compute_best_iou(self):
         max_iou = 0
@@ -130,7 +145,7 @@ class TextLocEnv(gym.Env):
 
     def reset(self):
         """Reset the environment to its initial state (the bounding box covers the entire image"""
-        self.history = []
+        self.history = self.create_empty_history()
         self.bbox = np.array([0, 0, self.image.width, self.image.height])
         self.state = self.compute_state()
         self.done = False
@@ -149,7 +164,7 @@ class TextLocEnv(gym.Env):
         return croppped.resize((224, 224), LANCZOS)
 
     def compute_state(self):
-        return self.extract_features(), self.history
+        return np.concatenate((self.extract_features().array, np.array(self.history).flatten()))
 
     def extract_features(self):
         """Compute the state from the image, the bounding box and the action history"""
