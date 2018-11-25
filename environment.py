@@ -161,7 +161,7 @@ class TextLocEnv(gym.Env):
 
     def get_warped_bbox_contents(self):
         cropped = self.image.crop(self.bbox)
-        return croppped.resize((224, 224), LANCZOS)
+        return cropped.resize((224, 224), LANCZOS)
 
     def compute_state(self):
         return np.concatenate((self.extract_features().array, np.array(self.history).flatten()))
