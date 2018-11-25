@@ -160,7 +160,7 @@ class TextLocEnv(gym.Env):
         copy.show()
 
     def get_warped_bbox_contents(self):
-        croppped = self.image.crop(self.bbox)
+        cropped = self.image.crop(self.bbox)
         return croppped.resize((224, 224), LANCZOS)
 
     def compute_state(self):
