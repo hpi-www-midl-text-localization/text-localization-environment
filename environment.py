@@ -9,25 +9,29 @@ import numpy as np
 class TextLocEnv(gym.Env):
 
     HISTORY_LENGTH = 10
+    # ⍺: factor relative to the current box size that is used for every transformation action
+    ALPHA = 0.2
+    # τ: Threshold of intersection over union for the trigger action to yield a positive reward
+    TAU = 0.6
+    # η: Reward of the trigger action
+    ETA = 3.0
 
-    def __init__(self, image, true_bboxes):
-        self.alpha = 0.2
-        self.tau = 0.6
-        self.eta = 3.0
+    def __init__(self, image, true_bboxes, use_gpu=False):
         self.feature_extractor = VGG16Layers()
         self.action_space = spaces.Discrete(9)
-        self.action_set = {0: self.up,
-                           1: self.down,
-                           2: self.left,
-                           3: self.right,
-                           4: self.zoom_in,
-                           5: self.zoom_out,
-                           6: self.wider,
+        self.action_set = {0: self.right,
+                           1: self.left,
+                           2: self.up,
+                           3: self.down,
+                           4: self.bigger,
+                           5: self.smaller,
+                           6: self.fatter,
                            7: self.taller,
                            8: self.trigger
                            }
 
-        # self.feature_extractor.to_gpu(0)
+        if use_gpu:
+            self.feature_extractor.to_gpu(0)
 
         self.image = image
         self.true_bboxes = true_bboxes
@@ -49,27 +53,25 @@ class TextLocEnv(gym.Env):
 
         reward = 0
         if self.action_set[action] == self.trigger:
-            if self.iou >= self.tau:
-                reward = self.eta
+            if self.iou >= self.TAU:
+                reward = self.ETA
             else:
-                reward = -self.eta
+                reward = -self.ETA
         else:
             new_iou = self.compute_best_iou()
             reward = np.sign(new_iou - self.iou)
             self.iou = new_iou
 
         self.history.insert(0, self.to_one_hot(action))
-
-        if len(self.history) > TextLocEnv.HISTORY_LENGTH:
-            self.history.pop()
+        self.history.pop()
 
         self.state = self.compute_state()
 
         return self.state, reward, self.done, {}
 
     def create_empty_history(self):
-        flat_history = np.repeat([False], TextLocEnv.HISTORY_LENGTH * self.action_space.n)
-        history = flat_history.reshape((TextLocEnv.HISTORY_LENGTH, self.action_space.n))
+        flat_history = np.repeat([False], self.HISTORY_LENGTH * self.action_space.n)
+        history = flat_history.reshape((self.HISTORY_LENGTH, self.action_space.n))
 
         return history.tolist()
 
@@ -82,6 +84,7 @@ class TextLocEnv(gym.Env):
         return max_iou
 
     def compute_iou(self, other_bbox):
+        """Computes the intersection over union of the argument and the current bounding box."""
         intersection = self.compute_intersection(other_bbox)
 
         area_1 = (self.bbox[2] - self.bbox[0]) * (self.bbox[3] - self.bbox[1])
@@ -113,13 +116,13 @@ class TextLocEnv(gym.Env):
     def right(self):
         self.adjust_bbox(np.array([1, 0, 1, 0]))
 
-    def zoom_in(self):
+    def bigger(self):
         self.adjust_bbox(np.array([1, 1, -1, -1]))
 
-    def zoom_out(self):
+    def smaller(self):
         self.adjust_bbox(np.array([-1, -1, 1, 1]))
 
-    def wider(self):
+    def fatter(self):
         self.adjust_bbox(np.array([-1, 0, 1, 0]))
 
     def taller(self):
@@ -129,8 +132,8 @@ class TextLocEnv(gym.Env):
         self.done = True
 
     def adjust_bbox(self, directions):
-        ah = round(self.alpha * (self.bbox[3] - self.bbox[1]))
-        aw = round(self.alpha * (self.bbox[2] - self.bbox[0]))
+        ah = round(self.ALPHA * (self.bbox[3] - self.bbox[1]))
+        aw = round(self.ALPHA * (self.bbox[2] - self.bbox[0]))
 
         adjustments = np.array([aw, ah, aw, ah])
         delta = directions * adjustments
@@ -167,7 +170,7 @@ class TextLocEnv(gym.Env):
         return np.concatenate((self.extract_features().array, np.array(self.history).flatten()))
 
     def extract_features(self):
-        """Compute the state from the image, the bounding box and the action history"""
+        """Extract features from the image using the VGG16 network"""
         warped = self.get_warped_bbox_contents()
         feature = self.feature_extractor.extract([warped], layers=["fc7"])["fc7"]
 
