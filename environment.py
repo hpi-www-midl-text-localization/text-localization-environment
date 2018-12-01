@@ -75,6 +75,22 @@ class TextLocEnv(gym.Env):
 
         return history.tolist()
 
+    def create_ior_mark(self):
+        """Creates an IoR (inhibition of return) mark that crosses out the current bounding box.
+        This is necessary to find multiple objects within one image"""
+        draw = ImageDraw.Draw(self.image)
+
+        center_height = (self.bbox[3] + self.bbox[1]) / 2
+        center_width = (self.bbox[2] + self.bbox[0]) / 2
+        height_frac = (self.bbox[3] - self.bbox[1]) / 12
+        width_frac = (self.bbox[2] - self.bbox[0]) / 12
+
+        horizontal_box = [self.bbox[0], center_height - height_frac, self.bbox[2], center_height + height_frac]
+        vertical_box = [center_width + width_frac, self.bbox[1], center_width - width_frac, self.bbox[3]]
+
+        draw.rectangle(horizontal_box, fill=(255, 255, 255))
+        draw.rectangle(vertical_box, fill=(255, 255, 255))
+
     def compute_best_iou(self):
         max_iou = 0
 
@@ -130,6 +146,7 @@ class TextLocEnv(gym.Env):
 
     def trigger(self):
         self.done = True
+        self.create_ior_mark()
 
     def adjust_bbox(self, directions):
         ah = round(self.ALPHA * (self.bbox[3] - self.bbox[1]))
