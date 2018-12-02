@@ -157,10 +157,15 @@ class TextLocEnv(gym.Env):
 
     def render(self, mode='human'):
         """Render the current state"""
-        copy = self.image.copy()
-        draw = ImageDraw.Draw(copy)
-        draw.rectangle(self.bbox.tolist(), outline=(255, 255, 255))
-        copy.show()
+
+        if mode == 'human':
+            copy = self.image.copy()
+            draw = ImageDraw.Draw(copy)
+            draw.rectangle(self.bbox.tolist(), outline=(255, 255, 255))
+            copy.show()
+        elif mode == 'box':
+            warped = self.get_warped_bbox_contents()
+            warped.show()
 
     def get_warped_bbox_contents(self):
         cropped = self.image.crop(self.bbox)
