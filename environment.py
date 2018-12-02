@@ -139,10 +139,6 @@ class TextLocEnv(gym.Env):
         delta = directions * adjustments
 
         new_box = self.bbox + delta
-        new_box[0] = max(new_box[0], 0)
-        new_box[1] = max(new_box[1], 0)
-        new_box[2] = min(new_box[2], self.image.width)
-        new_box[3] = min(new_box[3], self.image.height)
 
         self.bbox = new_box
 
