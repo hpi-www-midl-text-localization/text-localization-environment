@@ -2,7 +2,7 @@ import gym
 from gym import spaces
 from chainer.links import VGG16Layers
 from PIL import ImageDraw
-from PIL.Image import LANCZOS
+from PIL.Image import LANCZOS, MAX_IMAGE_PIXELS
 import numpy as np
 
 
@@ -37,7 +37,7 @@ class TextLocEnv(gym.Env):
         self.true_bboxes = true_bboxes
         self.history = self.create_empty_history()
         self.bbox = np.array([0, 0, image.width, image.height])
-        self.iou = 0
+        self.iou = self.compute_best_iou()
         self.state = self.compute_state()
         self.done = False
 
@@ -131,6 +131,13 @@ class TextLocEnv(gym.Env):
     def trigger(self):
         self.done = True
 
+    @staticmethod
+    def box_size(box):
+        width = box[2] - box[0]
+        height = box[3] - box[1]
+
+        return width * height
+
     def adjust_bbox(self, directions):
         ah = round(self.ALPHA * (self.bbox[3] - self.bbox[1]))
         aw = round(self.ALPHA * (self.bbox[2] - self.bbox[0]))
@@ -140,7 +147,8 @@ class TextLocEnv(gym.Env):
 
         new_box = self.bbox + delta
 
-        self.bbox = new_box
+        if self.box_size(new_box) < MAX_IMAGE_PIXELS:
+            self.bbox = new_box
 
     def reset(self):
         """Reset the environment to its initial state (the bounding box covers the entire image"""
@@ -148,6 +156,7 @@ class TextLocEnv(gym.Env):
         self.bbox = np.array([0, 0, self.image.width, self.image.height])
         self.state = self.compute_state()
         self.done = False
+        self.iou = self.compute_best_iou()
 
         return self.state
 
