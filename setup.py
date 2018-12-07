@@ -2,8 +2,8 @@ from setuptools import setup
 
 requirements = [
       'gym',
-      'chainer,'
-      'numpy'
+      'chainer',
+      'numpy',
       'Pillow']
 
 setup(name='text_localization_environment',
