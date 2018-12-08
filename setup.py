@@ -8,5 +8,5 @@ requirements = [
 
 setup(name='text_localization_environment',
       version='0.0.1',
-      install_requires=requirements  # And any other dependencies foo needs
+      install_requires=requirements
 )
