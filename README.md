@@ -18,7 +18,7 @@ To unistall call
 pip uninstall text_localization_environment
 ```
 
-To use the environment call
+To use the environment, call
 
 ```
 from text_localization_environment import TextLocEnv
