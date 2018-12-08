@@ -82,7 +82,7 @@ class TextLocEnv(gym.Env):
     @staticmethod
     def to_four_corners_array(two_bbox):
         """
-        Creates an array of bounding boxes with four corners out of the bounding box with two corners, so
+        Creates an array of bounding boxes with four corners out of a bounding box with two corners, so
         that the ImageMasker can be applied.
 
         :param two_bbox: Bounding box with two points, top left and bottom right
