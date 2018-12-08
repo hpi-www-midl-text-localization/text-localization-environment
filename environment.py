@@ -42,9 +42,6 @@ class TextLocEnv(gym.Env):
         self.state = self.compute_state()
         self.done = False
 
-        if self.use_gpu:
-            self.feature_extractor.to_gpu(0)
-
     def step(self, action):
         """Execute an action and return
             state - the next state,
@@ -89,10 +86,10 @@ class TextLocEnv(gym.Env):
 
         :return: An array of bounding boxes that corresponds to the requirements of the ImageMasker
         """
-        top_left = np.array([two_bbox[0], two_bbox[1]])
-        bottom_left = np.array([two_bbox[0], two_bbox[3]])
-        top_right = np.array([two_bbox[2], two_bbox[1]])
-        bottom_right = np.array([two_bbox[2], two_bbox[3]])
+        top_left = np.array([two_bbox[0], two_bbox[1]], dtype=np.int32)
+        bottom_left = np.array([two_bbox[0], two_bbox[3]], dtype=np.int32)
+        top_right = np.array([two_bbox[2], two_bbox[1]], dtype=np.int32)
+        bottom_right = np.array([two_bbox[2], two_bbox[3]], dtype=np.int32)
 
         four_bbox = np.array([bottom_right, bottom_left, top_left, top_right])
 
@@ -105,24 +102,32 @@ class TextLocEnv(gym.Env):
         """
         masker = ImageMasker(0)
 
-        center_height = (self.bbox[3] + self.bbox[1]) / 2
-        center_width = (self.bbox[2] + self.bbox[0]) / 2
-        height_frac = (self.bbox[3] - self.bbox[1]) / 12
-        width_frac = (self.bbox[2] - self.bbox[0]) / 12
+        center_height = round((self.bbox[3] + self.bbox[1]) / 2)
+        center_width = round((self.bbox[2] + self.bbox[0]) / 2)
+        height_frac = round((self.bbox[3] - self.bbox[1]) / 12)
+        width_frac = round((self.bbox[2] - self.bbox[0]) / 12)
 
         horizontal_box = [self.bbox[0], center_height - height_frac, self.bbox[2], center_height + height_frac]
         vertical_box = [center_width - width_frac, self.bbox[1], center_width + width_frac, self.bbox[3]]
+
+        horizontal_box_four_corners = self.to_four_corners_array(horizontal_box)
+        vertical_box_four_corners = self.to_four_corners_array(vertical_box)
 
         array_module = np
 
         if self.use_gpu:
             array_module = cuda.cupy
+            horizontal_box_four_corners = cuda.to_gpu(horizontal_box_four_corners, 0)
+            vertical_box_four_corners = cuda.to_gpu(vertical_box_four_corners, 0)
 
-        new_img = np.array(self.image)
-        new_img = masker.mask_array(new_img, self.to_four_corners_array(horizontal_box), array_module)
-        new_img = masker.mask_array(new_img, self.to_four_corners_array(vertical_box), array_module)
+        new_img = array_module.array(self.image, dtype=np.int32)
+        new_img = masker.mask_array(new_img, horizontal_box_four_corners, array_module)
+        new_img = masker.mask_array(new_img, vertical_box_four_corners, array_module)
 
-        self.image = Image.fromarray(new_img)
+        if self.use_gpu:
+            self.image = Image.fromarray(cuda.to_cpu(new_img).astype(np.uint8))
+        else:
+            self.image = Image.fromarray(new_img.astype(np.uint8))
 
     def compute_best_iou(self):
         max_iou = 0

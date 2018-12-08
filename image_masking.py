@@ -1,8 +1,5 @@
 import numpy
-from collections import namedtuple
 from chainer.backends import cuda
-
-Size = namedtuple('Size', ['height', 'width'])
 
 
 class ImageMasker:
@@ -23,13 +20,8 @@ class ImageMasker:
         left_height_vectors = corners[:, 0, :] - corners[:, 3, :]
         right_height_vectors = corners[:, 2, :] - corners[:, 1, :]
 
-        print(top_width_vectors[0])
-        print(bottom_width_vectors[0])
-        print(left_height_vectors[0])
-        print(right_height_vectors[0])
-
         for idx in numpy.ndindex(base_mask.shape):
-            w, h, batch_index = idx
+            h, w, batch_index = idx
 
             top_width_vector = top_width_vectors[batch_index]
             bottom_width_vector = bottom_width_vectors[batch_index]
@@ -39,7 +31,7 @@ class ImageMasker:
             # determine cross product of each vector with our current point
             cross_products = []
             for corner, vector in zip(corners[batch_index], [top_width_vector, right_height_vector, bottom_width_vector, left_height_vector]):
-                cross_product = vector[0] * (w - corner[1]) - vector[1] * (h - corner[0])
+                cross_product = vector[0] * (h - corner[1]) - vector[1] * (w - corner[0])
                 cross_products.append(cross_product >= 0)
 
             # if the point is on the right of all lines (i.e positive) the point is inside the box and we can mark it
@@ -49,15 +41,14 @@ class ImageMasker:
         return base_mask
 
     def create_mask_gpu(self, base_mask, corners):
-
         create_mask_kernel = cuda.cupy.ElementwiseKernel(
-            'T originalMask, raw T corners, int32 inputHeight, int32 inputWidth, T fillValue',
+            'T originalMask, raw T corners, int32 inputHeight, int32 batchCount, T fillValue',
             'T mask',
             '''
                 // determine our current position in the array
-                int batchIndex = i % inputWidth;
-                int h = (i / inputWidth) % inputHeight;
-                int w = i / inputWidth / inputHeight;
+                int batchIndex = i % batchCount;
+                int w = (i / batchCount) % inputHeight;
+                int h = i / batchCount / inputHeight;
                 int cornerIndex = batchIndex * 4 * 2;
 
                 // calculate vectors for each side of the box
@@ -82,10 +73,10 @@ class ImageMasker:
                 };
 
                 // calculate cross product for each side of array
-                int crossTop = topVec.x * (w - corners[cornerIndex + 1]) - topVec.y * (h - corners[cornerIndex]);
-                int crossRight = rightVec.x * (w - corners[cornerIndex + 3]) - rightVec.y * (h - corners[cornerIndex + 2]);
-                int crossBottom = bottomVec.x * (w - corners[cornerIndex + 5]) - bottomVec.y * (h - corners[cornerIndex + 4]);
-                int crossLeft = leftVec.x * (w - corners[cornerIndex + 7]) - leftVec.y * (h - corners[cornerIndex + 6]);
+                int crossTop = topVec.x * (h - corners[cornerIndex + 1]) - topVec.y * (w - corners[cornerIndex]);
+                int crossRight = rightVec.x * (h - corners[cornerIndex + 3]) - rightVec.y * (w - corners[cornerIndex + 2]);
+                int crossBottom = bottomVec.x * (h - corners[cornerIndex + 5]) - bottomVec.y * (w - corners[cornerIndex + 4]);
+                int crossLeft = leftVec.x * (h - corners[cornerIndex + 7]) - leftVec.y * (w - corners[cornerIndex + 6]);
 
                 // our point is inside as long as every cross product is greater or equal to 0
                 bool inside = crossTop >= 0 && crossRight >= 0 && crossBottom >= 0 && crossLeft >= 0;
@@ -96,7 +87,7 @@ class ImageMasker:
         )
 
         height, width, channels = base_mask.shape
-        mask = create_mask_kernel(base_mask, corners, height, width, self.fill_value)
+        mask = create_mask_kernel(base_mask, corners, height, channels, self.fill_value)
         return mask
         
     def mask_array(self, array, corners, xp):
