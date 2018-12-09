@@ -34,6 +34,7 @@ class TextLocEnv(gym.Env):
 
         self.use_gpu = use_gpu
         self.image = image
+        self.episode_image = image
         self.true_bboxes = true_bboxes
         self.history = self.create_empty_history()
         self.bbox = np.array([0, 0, image.width, image.height])
@@ -119,14 +120,14 @@ class TextLocEnv(gym.Env):
             horizontal_box_four_corners = cuda.to_gpu(horizontal_box_four_corners, 0)
             vertical_box_four_corners = cuda.to_gpu(vertical_box_four_corners, 0)
 
-        new_img = array_module.array(self.image, dtype=np.int32)
+        new_img = array_module.array(self.episode_image, dtype=np.int32)
         new_img = masker.mask_array(new_img, horizontal_box_four_corners, array_module)
         new_img = masker.mask_array(new_img, vertical_box_four_corners, array_module)
 
         if self.use_gpu:
-            self.image = Image.fromarray(cuda.to_cpu(new_img).astype(np.uint8))
+            self.episode_image = Image.fromarray(cuda.to_cpu(new_img).astype(np.uint8))
         else:
-            self.image = Image.fromarray(new_img.astype(np.uint8))
+            self.episode_image = Image.fromarray(new_img.astype(np.uint8))
 
     def compute_best_iou(self):
         max_iou = 0
@@ -207,7 +208,8 @@ class TextLocEnv(gym.Env):
     def reset(self):
         """Reset the environment to its initial state (the bounding box covers the entire image"""
         self.history = self.create_empty_history()
-        self.bbox = np.array([0, 0, self.image.width, self.image.height])
+        self.episode_image = self.image
+        self.bbox = np.array([0, 0, self.episode_image.width, self.episode_image.height])
         self.state = self.compute_state()
         self.done = False
         self.iou = self.compute_best_iou()
@@ -218,7 +220,7 @@ class TextLocEnv(gym.Env):
         """Render the current state"""
 
         if mode == 'human':
-            copy = self.image.copy()
+            copy = self.episode_image.copy()
             draw = ImageDraw.Draw(copy)
             draw.rectangle(self.bbox.tolist(), outline=(255, 255, 255))
             copy.show()
@@ -227,7 +229,7 @@ class TextLocEnv(gym.Env):
             warped.show()
 
     def get_warped_bbox_contents(self):
-        cropped = self.image.crop(self.bbox)
+        cropped = self.episode_image.crop(self.bbox)
         return cropped.resize((224, 224), LANCZOS)
 
     def compute_state(self):
