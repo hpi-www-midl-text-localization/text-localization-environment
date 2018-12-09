@@ -1,5 +1,6 @@
 import gym
-from gym import spaces
+from gym import spaces, utils
+from gym.utils import seeding
 from chainer.links import VGG16Layers
 from chainer.backends import cuda
 from PIL import Image, ImageDraw
@@ -18,7 +19,7 @@ class TextLocEnv(gym.Env):
     # η: Reward of the trigger action
     ETA = 3.0
 
-    def __init__(self, image, true_bboxes, use_gpu=False):
+    def __init__(self, images, true_bboxes, use_gpu=False):
         self.feature_extractor = VGG16Layers()
         self.action_space = spaces.Discrete(9)
         self.action_set = {0: self.right,
@@ -33,14 +34,22 @@ class TextLocEnv(gym.Env):
                            }
 
         self.use_gpu = use_gpu
-        self.image = image
-        self.episode_image = image
+        if type(images) is not list: images = [images]
+        self.images = images
+
+        self.seed()
+        self.episode_image = self.np_random.choice(self.images)
+
         self.true_bboxes = true_bboxes
         self.history = self.create_empty_history()
-        self.bbox = np.array([0, 0, image.width, image.height])
+        self.bbox = np.array([0, 0, self.episode_image.width, self.episode_image.height])
         self.iou = self.compute_best_iou()
         self.state = self.compute_state()
         self.done = False
+
+    def seed(self, seed=None):
+        self.np_random, seed = seeding.np_random(seed)
+        return [seed]
 
     def step(self, action):
         """Execute an action and return
@@ -208,7 +217,7 @@ class TextLocEnv(gym.Env):
     def reset(self):
         """Reset the environment to its initial state (the bounding box covers the entire image"""
         self.history = self.create_empty_history()
-        self.episode_image = self.image
+        self.episode_image = self.np_random.choice(self.images)
         self.bbox = np.array([0, 0, self.episode_image.width, self.episode_image.height])
         self.state = self.compute_state()
         self.done = False
