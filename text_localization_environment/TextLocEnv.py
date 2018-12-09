@@ -1,9 +1,11 @@
 import gym
 from gym import spaces
 from chainer.links import VGG16Layers
-from PIL import ImageDraw
+from chainer.backends import cuda
+from PIL import Image, ImageDraw
 from PIL.Image import LANCZOS, MAX_IMAGE_PIXELS
 import numpy as np
+from text_localization_environment.ImageMasker import ImageMasker
 
 
 class TextLocEnv(gym.Env):
@@ -30,10 +32,9 @@ class TextLocEnv(gym.Env):
                            8: self.trigger
                            }
 
-        if use_gpu:
-            self.feature_extractor.to_gpu(0)
-
+        self.use_gpu = use_gpu
         self.image = image
+        self.episode_image = image
         self.true_bboxes = true_bboxes
         self.history = self.create_empty_history()
         self.bbox = np.array([0, 0, image.width, image.height])
@@ -74,6 +75,59 @@ class TextLocEnv(gym.Env):
         history = flat_history.reshape((self.HISTORY_LENGTH, self.action_space.n))
 
         return history.tolist()
+
+    @staticmethod
+    def to_four_corners_array(two_bbox):
+        """
+        Creates an array of bounding boxes with four corners out of a bounding box with two corners, so
+        that the ImageMasker can be applied.
+
+        :param two_bbox: Bounding box with two points, top left and bottom right
+
+        :return: An array of bounding boxes that corresponds to the requirements of the ImageMasker
+        """
+        top_left = np.array([two_bbox[0], two_bbox[1]], dtype=np.int32)
+        bottom_left = np.array([two_bbox[0], two_bbox[3]], dtype=np.int32)
+        top_right = np.array([two_bbox[2], two_bbox[1]], dtype=np.int32)
+        bottom_right = np.array([two_bbox[2], two_bbox[3]], dtype=np.int32)
+
+        four_bbox = np.array([bottom_right, bottom_left, top_left, top_right])
+
+        return np.array([four_bbox, four_bbox, four_bbox])
+
+    def create_ior_mark(self):
+        """
+        Creates an IoR (inhibition of return) mark that crosses out the current bounding box.
+        This is necessary to find multiple objects within one image
+        """
+        masker = ImageMasker(0)
+
+        center_height = round((self.bbox[3] + self.bbox[1]) / 2)
+        center_width = round((self.bbox[2] + self.bbox[0]) / 2)
+        height_frac = round((self.bbox[3] - self.bbox[1]) / 12)
+        width_frac = round((self.bbox[2] - self.bbox[0]) / 12)
+
+        horizontal_box = [self.bbox[0], center_height - height_frac, self.bbox[2], center_height + height_frac]
+        vertical_box = [center_width - width_frac, self.bbox[1], center_width + width_frac, self.bbox[3]]
+
+        horizontal_box_four_corners = self.to_four_corners_array(horizontal_box)
+        vertical_box_four_corners = self.to_four_corners_array(vertical_box)
+
+        array_module = np
+
+        if self.use_gpu:
+            array_module = cuda.cupy
+            horizontal_box_four_corners = cuda.to_gpu(horizontal_box_four_corners, 0)
+            vertical_box_four_corners = cuda.to_gpu(vertical_box_four_corners, 0)
+
+        new_img = array_module.array(self.episode_image, dtype=np.int32)
+        new_img = masker.mask_array(new_img, horizontal_box_four_corners, array_module)
+        new_img = masker.mask_array(new_img, vertical_box_four_corners, array_module)
+
+        if self.use_gpu:
+            self.episode_image = Image.fromarray(cuda.to_cpu(new_img).astype(np.uint8))
+        else:
+            self.episode_image = Image.fromarray(new_img.astype(np.uint8))
 
     def compute_best_iou(self):
         max_iou = 0
@@ -130,6 +184,7 @@ class TextLocEnv(gym.Env):
 
     def trigger(self):
         self.done = True
+        self.create_ior_mark()
 
     @staticmethod
     def box_size(box):
@@ -153,7 +208,8 @@ class TextLocEnv(gym.Env):
     def reset(self):
         """Reset the environment to its initial state (the bounding box covers the entire image"""
         self.history = self.create_empty_history()
-        self.bbox = np.array([0, 0, self.image.width, self.image.height])
+        self.episode_image = self.image
+        self.bbox = np.array([0, 0, self.episode_image.width, self.episode_image.height])
         self.state = self.compute_state()
         self.done = False
         self.iou = self.compute_best_iou()
@@ -164,7 +220,7 @@ class TextLocEnv(gym.Env):
         """Render the current state"""
 
         if mode == 'human':
-            copy = self.image.copy()
+            copy = self.episode_image.copy()
             draw = ImageDraw.Draw(copy)
             draw.rectangle(self.bbox.tolist(), outline=(255, 255, 255))
             copy.show()
@@ -173,7 +229,7 @@ class TextLocEnv(gym.Env):
             warped.show()
 
     def get_warped_bbox_contents(self):
-        cropped = self.image.crop(self.bbox)
+        cropped = self.episode_image.crop(self.bbox)
         return cropped.resize((224, 224), LANCZOS)
 
     def compute_state(self):
