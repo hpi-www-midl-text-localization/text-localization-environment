@@ -1,8 +1,8 @@
-import pytest
 import numpy as np
 from PIL import Image, ImageDraw
-from environment import TextLocEnv
-from image_masking import ImageMasker
+from text_localization_environment import TextLocEnv
+from text_localization_environment.ImageMasker import ImageMasker
+
 
 def test_mask_array_cpu():
     masker = ImageMasker(0)
@@ -21,6 +21,7 @@ def test_mask_array_cpu():
     expected_image = np.array(expected_image)
 
     assert ((actual_image == expected_image).all())
+
 
 if __name__ == "__main__":
     test_mask_array_cpu()

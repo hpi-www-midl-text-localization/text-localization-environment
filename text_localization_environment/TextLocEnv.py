@@ -5,7 +5,7 @@ from chainer.backends import cuda
 from PIL import Image, ImageDraw
 from PIL.Image import LANCZOS, MAX_IMAGE_PIXELS
 import numpy as np
-from image_masking import ImageMasker
+from text_localization_environment.ImageMasker import ImageMasker
 
 
 class TextLocEnv(gym.Env):
