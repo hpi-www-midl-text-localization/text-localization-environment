@@ -15,7 +15,7 @@ To install the package, clone this repository, open a terminal in the top folder
 pip install -e .
 ```
 
-To unistall call 
+To uninstall call 
 
 ```
 pip uninstall text_localization_environment
