@@ -43,15 +43,7 @@ class TextLocEnv(gym.Env):
         self.true_bboxes = true_bboxes
 
         self.seed()
-        random_index = self.np_random.randint(len(self.images))
-        self.episode_image = self.images[random_index]
-        self.episode_true_bboxes = self.true_bboxes[random_index]
-
-        self.history = self.create_empty_history()
-        self.bbox = np.array([0, 0, self.episode_image.width, self.episode_image.height])
-        self.iou = self.compute_best_iou()
-        self.state = self.compute_state()
-        self.done = False
+        self.reset()
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
