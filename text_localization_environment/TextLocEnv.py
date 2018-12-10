@@ -1,5 +1,6 @@
 import gym
-from gym import spaces
+from gym import spaces, utils
+from gym.utils import seeding
 from chainer.links import VGG16Layers
 from chainer.backends import cuda
 from PIL import Image, ImageDraw
@@ -18,7 +19,11 @@ class TextLocEnv(gym.Env):
     # η: Reward of the trigger action
     ETA = 3.0
 
-    def __init__(self, image, true_bboxes, use_gpu=False):
+    def __init__(self, images, true_bboxes, use_gpu=False):
+        """
+        :type images: PIL.Image or list
+        :type true_bboxes: numpy.ndarray
+        """
         self.feature_extractor = VGG16Layers()
         self.action_space = spaces.Discrete(9)
         self.action_set = {0: self.right,
@@ -33,14 +38,16 @@ class TextLocEnv(gym.Env):
                            }
 
         self.use_gpu = use_gpu
-        self.image = image
-        self.episode_image = image
+        if type(images) is not list: images = [images]
+        self.images = images
         self.true_bboxes = true_bboxes
-        self.history = self.create_empty_history()
-        self.bbox = np.array([0, 0, image.width, image.height])
-        self.iou = self.compute_best_iou()
-        self.state = self.compute_state()
-        self.done = False
+
+        self.seed()
+        self.reset()
+
+    def seed(self, seed=None):
+        self.np_random, seed = seeding.np_random(seed)
+        return [seed]
 
     def step(self, action):
         """Execute an action and return
@@ -132,7 +139,7 @@ class TextLocEnv(gym.Env):
     def compute_best_iou(self):
         max_iou = 0
 
-        for box in self.true_bboxes:
+        for box in self.episode_true_bboxes:
             max_iou = max(max_iou, self.compute_iou(box))
 
         return max_iou
@@ -142,16 +149,16 @@ class TextLocEnv(gym.Env):
         intersection = self.compute_intersection(other_bbox)
 
         area_1 = (self.bbox[2] - self.bbox[0]) * (self.bbox[3] - self.bbox[1])
-        area_2 = (other_bbox[2] - other_bbox[0]) * (other_bbox[3] - other_bbox[1])
+        area_2 = (other_bbox[1][0] - other_bbox[0][0]) * (other_bbox[1][1] - other_bbox[0][1])
         union = area_1 + area_2 - intersection
 
         return intersection / union
 
     def compute_intersection(self, other_bbox):
-        left = max(self.bbox[0], other_bbox[0])
-        top = max(self.bbox[1], other_bbox[1])
-        right = min(self.bbox[2], other_bbox[2])
-        bottom = min(self.bbox[3], other_bbox[3])
+        left = max(self.bbox[0], other_bbox[0][0])
+        top = max(self.bbox[1], other_bbox[0][1])
+        right = min(self.bbox[2], other_bbox[1][0])
+        bottom = min(self.bbox[3], other_bbox[1][1])
 
         if right < left or bottom < top:
             return 0
@@ -208,7 +215,11 @@ class TextLocEnv(gym.Env):
     def reset(self):
         """Reset the environment to its initial state (the bounding box covers the entire image"""
         self.history = self.create_empty_history()
-        self.episode_image = self.image
+
+        random_index = self.np_random.randint(len(self.images))
+        self.episode_image = self.images[random_index]
+        self.episode_true_bboxes = self.true_bboxes[random_index]
+
         self.bbox = np.array([0, 0, self.episode_image.width, self.episode_image.height])
         self.state = self.compute_state()
         self.done = False
