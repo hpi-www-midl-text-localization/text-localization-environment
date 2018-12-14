@@ -178,10 +178,10 @@ class TextLocEnv(gym.Env):
         self.adjust_bbox(np.array([1, 0, 1, 0]))
 
     def bigger(self):
-        self.adjust_bbox(np.array([1, 1, -1, -1]))
+        self.adjust_bbox(np.array([-1, -1, 1, 1]))
 
     def smaller(self):
-        self.adjust_bbox(np.array([-1, -1, 1, 1]))
+        self.adjust_bbox(np.array([1, 1, -1, -1]))
 
     def fatter(self):
         self.adjust_bbox(np.array([-1, 0, 1, 0]))
