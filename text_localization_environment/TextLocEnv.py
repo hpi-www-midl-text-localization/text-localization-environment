@@ -59,7 +59,20 @@ class TextLocEnv(gym.Env):
 
         self.action_set[action]()
 
+        reward = self.calculate_reward(action)
+
+        self.history.insert(0, self.to_one_hot(action))
+        self.history.pop()
+
+        self.state = self.compute_state()
+
+        info = self.find_positive_actions()
+
+        return self.state, reward, self.done, info
+
+    def calculate_reward(self, action):
         reward = 0
+
         if self.action_set[action] == self.trigger:
             if self.iou >= self.TAU:
                 reward = self.ETA
@@ -70,12 +83,31 @@ class TextLocEnv(gym.Env):
             reward = np.sign(new_iou - self.iou)
             self.iou = new_iou
 
-        self.history.insert(0, self.to_one_hot(action))
-        self.history.pop()
+        return reward
 
-        self.state = self.compute_state()
+    def calculate_potential_reward(self, action):
+        old_bbox = self.bbox
+        old_iou = self.iou
 
-        return self.state, reward, self.done, {}
+        if self.action_set[action] != self.trigger:
+            self.action_set[action]()
+
+        reward = self.calculate_reward(action)
+
+        self.bbox = old_bbox
+        self.iou = old_iou
+
+        return reward
+
+    def find_positive_actions(self):
+        rewards = np.array([self.calculate_potential_reward(i) for i in self.action_set])
+
+        positive_actions = np.arange(0, self.action_space.n)[rewards > 0]
+
+        if len(positive_actions) == 0:
+            return np.arange(0, self.action_space.n)
+
+        return positive_actions.tolist()
 
     def create_empty_history(self):
         flat_history = np.repeat([False], self.HISTORY_LENGTH * self.action_space.n)
