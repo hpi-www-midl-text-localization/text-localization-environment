@@ -19,10 +19,14 @@ class TextLocEnv(gym.Env):
     # η: Reward of the trigger action
     ETA = 3.0
 
-    def __init__(self, images, true_bboxes, gpu_id=-1):
+    def __init__(self, image_paths, true_bboxes, gpu_id=-1):
         """
-        :type images: PIL.Image or list
+        :param image_paths: The paths to the individual images
+        :param true_bboxes: The true bounding boxes for each image
+        :param gpu_id: The ID of the GPU to be used. -1 if CPU should be used instead
+        :type image_paths: String or list
         :type true_bboxes: numpy.ndarray
+        :type gpu_id: int
         """
         self.feature_extractor = VGG16Layers()
         self.action_space = spaces.Discrete(9)
@@ -38,8 +42,8 @@ class TextLocEnv(gym.Env):
                            }
 
         self.gpu_id = gpu_id
-        if type(images) is not list: images = [images]
-        self.images = images
+        if type(image_paths) is not list: image_paths = [image_paths]
+        self.image_paths = image_paths
         self.true_bboxes = true_bboxes
 
         self.seed()
@@ -216,8 +220,8 @@ class TextLocEnv(gym.Env):
         """Reset the environment to its initial state (the bounding box covers the entire image"""
         self.history = self.create_empty_history()
 
-        random_index = self.np_random.randint(len(self.images))
-        self.episode_image = Image.open(self.images[random_index])
+        random_index = self.np_random.randint(len(self.image_paths))
+        self.episode_image = Image.open(self.image_paths[random_index])
         self.episode_true_bboxes = self.true_bboxes[random_index]
 
         self.bbox = np.array([0, 0, self.episode_image.width, self.episode_image.height])
