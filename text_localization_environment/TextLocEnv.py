@@ -105,7 +105,7 @@ class TextLocEnv(gym.Env):
         positive_actions = np.arange(0, self.action_space.n)[rewards > 0]
 
         if len(positive_actions) == 0:
-            return np.arange(0, self.action_space.n)
+            return np.arange(0, self.action_space.n).tolist()
 
         return positive_actions.tolist()
 
