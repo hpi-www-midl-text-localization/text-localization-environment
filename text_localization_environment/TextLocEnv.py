@@ -1,5 +1,5 @@
 import gym
-from gym import spaces, utils
+from gym import spaces
 from gym.utils import seeding
 from chainer.links import VGG16Layers
 from chainer.backends import cuda
@@ -19,10 +19,14 @@ class TextLocEnv(gym.Env):
     # η: Reward of the trigger action
     ETA = 3.0
 
-    def __init__(self, images, true_bboxes, use_gpu=False):
+    def __init__(self, image_paths, true_bboxes, gpu_id=-1):
         """
-        :type images: PIL.Image or list
+        :param image_paths: The paths to the individual images
+        :param true_bboxes: The true bounding boxes for each image
+        :param gpu_id: The ID of the GPU to be used. -1 if CPU should be used instead
+        :type image_paths: String or list
         :type true_bboxes: numpy.ndarray
+        :type gpu_id: int
         """
         self.feature_extractor = VGG16Layers()
         self.action_space = spaces.Discrete(9)
@@ -37,9 +41,9 @@ class TextLocEnv(gym.Env):
                            8: self.trigger
                            }
 
-        self.use_gpu = use_gpu
-        if type(images) is not list: images = [images]
-        self.images = images
+        self.gpu_id = gpu_id
+        if type(image_paths) is not list: image_paths = [image_paths]
+        self.image_paths = image_paths
         self.true_bboxes = true_bboxes
 
         self.seed()
@@ -154,16 +158,16 @@ class TextLocEnv(gym.Env):
 
         array_module = np
 
-        if self.use_gpu:
+        if self.gpu_id != -1:
             array_module = cuda.cupy
-            horizontal_box_four_corners = cuda.to_gpu(horizontal_box_four_corners, 0)
-            vertical_box_four_corners = cuda.to_gpu(vertical_box_four_corners, 0)
+            horizontal_box_four_corners = cuda.to_gpu(horizontal_box_four_corners, self.gpu_id)
+            vertical_box_four_corners = cuda.to_gpu(vertical_box_four_corners, self.gpu_id)
 
         new_img = array_module.array(self.episode_image, dtype=np.int32)
         new_img = masker.mask_array(new_img, horizontal_box_four_corners, array_module)
         new_img = masker.mask_array(new_img, vertical_box_four_corners, array_module)
 
-        if self.use_gpu:
+        if self.gpu_id != -1:
             self.episode_image = Image.fromarray(cuda.to_cpu(new_img).astype(np.uint8))
         else:
             self.episode_image = Image.fromarray(new_img.astype(np.uint8))
@@ -248,8 +252,8 @@ class TextLocEnv(gym.Env):
         """Reset the environment to its initial state (the bounding box covers the entire image"""
         self.history = self.create_empty_history()
 
-        random_index = self.np_random.randint(len(self.images))
-        self.episode_image = self.images[random_index]
+        random_index = self.np_random.randint(len(self.image_paths))
+        self.episode_image = Image.open(self.image_paths[random_index])
         self.episode_true_bboxes = self.true_bboxes[random_index]
 
         self.bbox = np.array([0, 0, self.episode_image.width, self.episode_image.height])
