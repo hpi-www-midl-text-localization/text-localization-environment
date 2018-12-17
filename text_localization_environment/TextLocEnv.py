@@ -1,4 +1,5 @@
 import gym
+from gym import spaces
 from gym.utils import seeding
 from chainer.links import VGG16Layers
 from chainer.backends import cuda
@@ -19,7 +20,7 @@ class TextLocEnv(gym.Env):
     # η: Reward of the trigger action
     ETA = 3.0
 
-    def __init__(self, image_paths, true_bboxes, gpu_id=-1):
+    def __init__(self, image_paths, true_bboxes, gpu_id=-1, training_phase=True):
         """
         :param image_paths: The paths to the individual images
         :param true_bboxes: The true bounding boxes for each image
@@ -29,7 +30,13 @@ class TextLocEnv(gym.Env):
         :type gpu_id: int
         """
         self.feature_extractor = VGG16Layers()
-        self.action_space = LimitingDiscrete(9)
+        self.training_phase = training_phase
+
+        if self.training_phase:
+            self.action_space = LimitingDiscrete(9)
+        else:
+            self.action_space = spaces.Discrete(9)
+
         self.action_set = {0: self.right,
                            1: self.left,
                            2: self.up,
@@ -71,7 +78,9 @@ class TextLocEnv(gym.Env):
         self.state = self.compute_state()
 
         info = self.find_positive_actions()
-        self.action_space.set_available_actions(info)
+
+        if self.training_phase:
+            self.action_space.set_available_actions(info)
 
         return self.state, reward, self.done, info
 
@@ -262,7 +271,8 @@ class TextLocEnv(gym.Env):
         self.done = False
         self.iou = self.compute_best_iou()
 
-        self.action_space.reset_available_actions()
+        if self.training_phase:
+            self.action_space.reset_available_actions()
 
         return self.state
 
