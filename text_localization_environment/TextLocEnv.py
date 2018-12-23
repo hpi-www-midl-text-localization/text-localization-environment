@@ -18,7 +18,7 @@ class TextLocEnv(gym.Env):
     # τ: Threshold of intersection over union for the trigger action to yield a positive reward
     TAU = 0.6
     # η: Reward of the trigger action
-    ETA = 10.0
+    ETA = 3.0
 
     def __init__(self, image_paths, true_bboxes, gpu_id=-1, training_phase=True):
         """
@@ -98,9 +98,6 @@ class TextLocEnv(gym.Env):
         else:
             new_iou = self.compute_best_iou()
             reward = np.sign(new_iou - self.iou)
-
-            if reward == 0:
-                reward = -1
 
             self.iou = new_iou
 
