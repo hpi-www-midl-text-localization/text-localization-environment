@@ -69,7 +69,7 @@ class TextLocEnv(gym.Env):
             reward - the reward,
             done - whether a terminal state was reached,
             info - any additional info"""
-        assert self.action_space.contains(action), "%r (%s) is an invalid action" % (action, type(action))
+        # assert self.action_space.contains(action), "%r (%s) is an invalid action" % (action, type(action))
 
         self.action_set[action]()
 
