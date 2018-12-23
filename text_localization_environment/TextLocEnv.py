@@ -271,6 +271,10 @@ class TextLocEnv(gym.Env):
 
         random_index = self.np_random.randint(len(self.image_paths))
         self.episode_image = Image.open(self.image_paths[random_index])
+
+        if self.episode_image.mode != 'RGB':
+            self.episode_image = self.episode_image.convert('RGB')
+
         self.episode_true_bboxes = self.true_bboxes[random_index]
 
         self.bbox = np.array([0, 0, self.episode_image.width, self.episode_image.height])
