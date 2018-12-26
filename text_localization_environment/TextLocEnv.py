@@ -283,10 +283,11 @@ class TextLocEnv(gym.Env):
         return cropped.resize((224, 224), LANCZOS)
 
     def compute_state(self):
+        history = np.array(self.history).flatten()
+        features = self.extract_features().array
         if self.gpu_id != -1:
-            return np.concatenate((cuda.to_cpu(self.extract_features().array), np.array(self.history).flatten()))
-        else:
-            return np.concatenate((self.extract_features().array, np.array(self.history).flatten()))
+            features = cuda.to_cpu(features)
+        return np.concatenate(features, history)
 
     def extract_features(self):
         """Extract features from the image using the VGG16 network"""
