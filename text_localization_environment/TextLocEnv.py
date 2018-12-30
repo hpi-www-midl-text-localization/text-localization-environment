@@ -287,7 +287,7 @@ class TextLocEnv(gym.Env):
         features = self.extract_features().array
         if self.gpu_id != -1:
             features = cuda.to_cpu(features)
-        return np.concatenate(features, history)
+        return np.concatenate((features, history))
 
     def extract_features(self):
         """Extract features from the image using the VGG16 network"""
