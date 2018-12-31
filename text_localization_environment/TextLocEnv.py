@@ -100,7 +100,12 @@ class TextLocEnv(gym.Env):
             reward = np.sign(new_iou - self.iou)
 
             if reward == 0:
-                reward = self.iou - 1
+                self.steps_since_last_change += 1
+            else:
+                self.steps_since_last_change = 0
+
+            if self.steps_since_last_change >= 3:
+                reward = -1
 
             self.iou = new_iou
 
@@ -281,6 +286,7 @@ class TextLocEnv(gym.Env):
         self.state = self.compute_state()
         self.done = False
         self.iou = self.compute_best_iou()
+        self.steps_since_last_change = 0
 
         if self.training_phase:
             self.action_space.reset_available_actions()
