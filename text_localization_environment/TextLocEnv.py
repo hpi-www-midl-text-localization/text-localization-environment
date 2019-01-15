@@ -86,8 +86,13 @@ class TextLocEnv(gym.Env):
             else:
                 reward = -self.ETA
         else:
-            new_iou = self.compute_best_iou()
-            reward = np.sign(new_iou - self.iou)
+            new_iou, box = self.compute_best_iou()
+
+            env_box_center = (np.array(self.bbox[2:]) - np.array(self.bbox[0:2]))/2
+            text_box_center = (np.array(self.episode_true_bboxes[box][1]) - np.array(self.episode_true_bboxes[box][0]))/2
+            center_distance = np.linalg.norm(env_box_center - text_box_center)
+
+            reward = np.sign(new_iou - self.iou) - center_distance
             self.iou = new_iou
 
         return reward
@@ -177,11 +182,13 @@ class TextLocEnv(gym.Env):
 
     def compute_best_iou(self):
         max_iou = 0
+        i = -1
 
         for box in self.episode_true_bboxes:
             max_iou = max(max_iou, self.compute_iou(box))
+            i += 1
 
-        return max_iou
+        return max_iou, i
 
     def compute_iou(self, other_bbox):
         """Computes the intersection over union of the argument and the current bounding box."""
@@ -262,7 +269,7 @@ class TextLocEnv(gym.Env):
         self.bbox = np.array([0, 0, self.episode_image.width, self.episode_image.height])
         self.state = self.compute_state()
         self.done = False
-        self.iou = self.compute_best_iou()
+        self.iou = self.compute_best_iou()[0]
 
         return self.state
 
