@@ -95,7 +95,7 @@ class TextLocEnv(gym.Env):
         
             reward = np.sign(new_iou - self.iou) + np.sign(self.center_distance - new_center_distance)/2
 
-            if reward == np.sign(self.center_distance - new_center_distance)/2:
+            if new_iou == self.iou:
                 self.steps_since_last_change += 1
             else:
                 self.steps_since_last_change = 0
