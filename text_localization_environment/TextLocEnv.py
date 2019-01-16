@@ -92,7 +92,7 @@ class TextLocEnv(gym.Env):
             text_box_center = np.array(self.episode_true_bboxes[box][0]) + \
                               (np.array(self.episode_true_bboxes[box][1]) - np.array(self.episode_true_bboxes[box][0]))/2
             center_distance = np.linalg.norm(env_box_center - text_box_center)
-
+        
             reward = np.sign(new_iou - self.iou) - center_distance
             self.iou = new_iou
 
@@ -232,10 +232,10 @@ class TextLocEnv(gym.Env):
         self.adjust_bbox(np.array([1, 0, 1, 0]))
 
     def bigger(self):
-        self.adjust_bbox(np.array([-1, -1, 1, 1]))
+        self.adjust_bbox(np.array([-0.5, -0.5, 0.5, 0.5]))
 
     def smaller(self):
-        self.adjust_bbox(np.array([1, 1, -1, -1]))
+        self.adjust_bbox(np.array([0.5, 0.5, -0.5, -0.5]))
 
     def fatter(self):
         self.adjust_bbox(np.array([-1, 0, 1, 0]))
@@ -272,12 +272,18 @@ class TextLocEnv(gym.Env):
 
         random_index = self.np_random.randint(len(self.image_paths))
         self.episode_image = Image.open(self.image_paths[random_index])
+
+        if self.episode_image.mode != 'RGB':
+            self.episode_image = self.episode_image.convert('RGB')
+
         self.episode_true_bboxes = self.true_bboxes[random_index]
 
         self.bbox = np.array([0, 0, self.episode_image.width, self.episode_image.height])
         self.state = self.compute_state()
         self.done = False
         self.iou = self.compute_best_iou()[0]
+
+        self.steps_since_last_change = 0
 
         return self.state
 
@@ -298,11 +304,10 @@ class TextLocEnv(gym.Env):
         return cropped.resize((224, 224), LANCZOS)
 
     def compute_state(self):
-        history = np.array(self.history).flatten()
-        features = self.extract_features().array
         if self.gpu_id != -1:
-            features = cuda.to_cpu(features)
-        return np.concatenate((features, history))
+            return np.concatenate((cuda.to_cpu(self.extract_features().array), np.array(self.history).flatten()))
+        else:
+            return np.concatenate((self.extract_features().array, np.array(self.history).flatten()))
 
     def extract_features(self):
         """Extract features from the image using the VGG16 network"""
