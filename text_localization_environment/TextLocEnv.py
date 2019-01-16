@@ -94,16 +94,17 @@ class TextLocEnv(gym.Env):
             new_center_distance = np.linalg.norm(env_box_center - text_box_center)
         
             reward = np.sign(new_iou - self.iou) + np.sign(self.center_distance - new_center_distance)/2
-            self.iou = new_iou
-            self.center_distance = new_center_distance
 
-            if reward == -center_distance:
+            if reward == np.sign(self.center_distance - new_center_distance)/2:
                 self.steps_since_last_change += 1
             else:
                 self.steps_since_last_change = 0
 
             if self.steps_since_last_change >= 3:
                 reward -= -1
+
+            self.iou = new_iou
+            self.center_distance = new_center_distance
 
         return reward
 
