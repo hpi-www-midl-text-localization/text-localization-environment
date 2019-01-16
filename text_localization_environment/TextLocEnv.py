@@ -96,6 +96,14 @@ class TextLocEnv(gym.Env):
             reward = np.sign(new_iou - self.iou) - center_distance
             self.iou = new_iou
 
+            if reward == -center_distance:
+                self.steps_since_last_change += 1
+            else:
+                self.steps_since_last_change = 0
+
+            if self.steps_since_last_change >= 3:
+                reward -= -1
+
         return reward
 
     def calculate_potential_reward(self, action):
