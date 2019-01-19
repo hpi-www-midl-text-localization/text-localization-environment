@@ -258,7 +258,7 @@ class TextLocEnv(gym.Env):
 
         new_box = self.bbox + delta
 
-        if self.box_size(new_box) < MAX_IMAGE_PIXELS:
+        if self.box_size(self.get_viewport_from_bbox(new_box)) < MAX_IMAGE_PIXELS:
             self.bbox = new_box
 
     def reset(self):
@@ -293,12 +293,17 @@ class TextLocEnv(gym.Env):
             warped = self.get_warped_viewport()
             warped.show()
 
-    def get_warped_viewport(self):
-        delta_h = round((self.VIEWPORT_SIZE - 1.0) * (self.bbox[3] - self.bbox[1]))
-        delta_w = round((self.VIEWPORT_SIZE - 1.0) * (self.bbox[2] - self.bbox[0]))
+    def get_viewport_from_bbox(self, bbox):
+        delta_h = round((self.VIEWPORT_SIZE - 1.0) * (bbox[3] - bbox[1]))
+        delta_w = round((self.VIEWPORT_SIZE - 1.0) * (bbox[2] - bbox[0]))
 
         adjustments = np.array([-delta_w, -delta_h, delta_w, delta_h])
-        viewport = self.bbox + adjustments
+        viewport = bbox + adjustments
+
+        return viewport
+
+    def get_warped_viewport(self):
+        viewport = self.get_viewport_from_bbox(self.bbox)
 
         cropped = self.episode_image.crop(viewport)
         return cropped.resize((224, 224), LANCZOS)
