@@ -11,6 +11,7 @@ from text_localization_environment.ImageMasker import ImageMasker
 
 class TextLocEnv(gym.Env):
 
+    VIEWPORT_SIZE = 1.25
     HISTORY_LENGTH = 10
     # ⍺: factor relative to the current box size that is used for every transformation action
     ALPHA = 0.2
@@ -289,11 +290,17 @@ class TextLocEnv(gym.Env):
             draw.rectangle(self.bbox.tolist(), outline=(255, 255, 255))
             copy.show()
         elif mode == 'box':
-            warped = self.get_warped_bbox_contents()
+            warped = self.get_warped_viewport()
             warped.show()
 
-    def get_warped_bbox_contents(self):
-        cropped = self.episode_image.crop(self.bbox)
+    def get_warped_viewport(self):
+        delta_h = round((self.VIEWPORT_SIZE - 1.0) * (self.bbox[3] - self.bbox[1]))
+        delta_w = round((self.VIEWPORT_SIZE - 1.0) * (self.bbox[2] - self.bbox[0]))
+
+        adjustments = np.array([-delta_w, -delta_h, delta_w, delta_h])
+        viewport = self.bbox + adjustments
+
+        cropped = self.episode_image.crop(viewport)
         return cropped.resize((224, 224), LANCZOS)
 
     def compute_state(self):
@@ -304,7 +311,7 @@ class TextLocEnv(gym.Env):
 
     def extract_features(self):
         """Extract features from the image using the VGG16 network"""
-        warped = self.get_warped_bbox_contents()
+        warped = self.get_warped_viewport()
         feature = self.feature_extractor.extract([warped], layers=["fc7"])["fc7"]
 
         return feature[0]
