@@ -17,7 +17,7 @@ class TextLocEnv(gym.Env):
     # τ: Threshold of intersection over union for the trigger action to yield a positive reward
     TAU = 0.6
     # η: Reward of the trigger action
-    ETA = 3.0
+    ETA = 10.0
 
     def __init__(self, image_paths, true_bboxes, gpu_id=-1):
         """
