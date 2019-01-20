@@ -292,10 +292,10 @@ class TextLocEnv(gym.Env):
         return cropped.resize((224, 224), LANCZOS)
 
     def compute_state(self):
-        image_array = np.array(self.get_warped_bbox_contents()).transpose((2, 0, 1))
-        history = np.array(self.history).flatten()
+        image_array = np.array(self.get_warped_bbox_contents(), dtype=np.float32).transpose((2, 0, 1))
+        history = np.array(self.history, dtype=np.float32).flatten()
 
-        return image_array, history
+        return image_array  # , history
 
     def to_one_hot(self, action):
         line = np.zeros(self.action_space.n, np.bool)
