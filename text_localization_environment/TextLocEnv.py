@@ -1,7 +1,6 @@
 import gym
 from gym import spaces
 from gym.utils import seeding
-from chainer.links import VGG16Layers
 from chainer.backends import cuda
 from PIL import Image, ImageDraw
 from PIL.Image import LANCZOS, MAX_IMAGE_PIXELS
@@ -28,7 +27,6 @@ class TextLocEnv(gym.Env):
         :type true_bboxes: numpy.ndarray
         :type gpu_id: int
         """
-        self.feature_extractor = VGG16Layers()
         self.action_space = spaces.Discrete(9)
         self.action_set = {0: self.right,
                            1: self.left,
@@ -45,9 +43,6 @@ class TextLocEnv(gym.Env):
         if type(image_paths) is not list: image_paths = [image_paths]
         self.image_paths = image_paths
         self.true_bboxes = true_bboxes
-
-        if self.gpu_id != -1:
-            self.feature_extractor.to_gpu(self.gpu_id)
 
         self.seed()
         self.reset()
@@ -297,17 +292,10 @@ class TextLocEnv(gym.Env):
         return cropped.resize((224, 224), LANCZOS)
 
     def compute_state(self):
-        if self.gpu_id != -1:
-            return np.concatenate((cuda.to_cpu(self.extract_features().array), np.array(self.history).flatten()))
-        else:
-            return np.concatenate((self.extract_features().array, np.array(self.history).flatten()))
+        image_array = np.array(self.get_warped_bbox_contents()).transpose((2, 0, 1))
+        history = np.array(self.history).flatten()
 
-    def extract_features(self):
-        """Extract features from the image using the VGG16 network"""
-        warped = self.get_warped_bbox_contents()
-        feature = self.feature_extractor.extract([warped], layers=["fc7"])["fc7"]
-
-        return feature[0]
+        return image_array, history
 
     def to_one_hot(self, action):
         line = np.zeros(self.action_space.n, np.bool)
