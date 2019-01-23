@@ -11,7 +11,7 @@ from text_localization_environment.ImageMasker import ImageMasker
 
 class TextLocEnv(gym.Env):
 
-    VIEWPORT_SIZE = 1.25
+    ENLARGEMENT_FACTOR = 1.25
     HISTORY_LENGTH = 10
     # ⍺: factor relative to the current box size that is used for every transformation action
     ALPHA = 0.2
@@ -259,7 +259,7 @@ class TextLocEnv(gym.Env):
 
         new_box = self.bbox + delta
 
-        if self.box_size(self.get_viewport_from_bbox(new_box)) < MAX_IMAGE_PIXELS:
+        if self.box_size(new_box) < MAX_IMAGE_PIXELS:
             self.bbox = new_box
 
     def reset(self):
@@ -274,7 +274,7 @@ class TextLocEnv(gym.Env):
 
         self.episode_true_bboxes = self.true_bboxes[random_index]
 
-        self.bbox = np.array([0, 0, self.episode_image.width, self.episode_image.height])
+        self.bbox = self.get_enlarged_bbox(np.array([0, 0, self.episode_image.width, self.episode_image.height]))
         self.state = self.compute_state()
         self.done = False
         self.iou = self.compute_best_iou()
@@ -295,19 +295,17 @@ class TextLocEnv(gym.Env):
             warped = self.get_warped_viewport()
             warped.show()
 
-    def get_viewport_from_bbox(self, bbox):
-        delta_h = round((self.VIEWPORT_SIZE - 1.0) * (bbox[3] - bbox[1]))
-        delta_w = round((self.VIEWPORT_SIZE - 1.0) * (bbox[2] - bbox[0]))
+    def get_enlarged_bbox(self, bbox):
+        delta_h = round((self.ENLARGEMENT_FACTOR - 1.0) * (bbox[3] - bbox[1]))
+        delta_w = round((self.ENLARGEMENT_FACTOR - 1.0) * (bbox[2] - bbox[0]))
 
         adjustments = np.array([-delta_w, -delta_h, delta_w, delta_h])
-        viewport = bbox + adjustments
+        large_bbox = bbox + adjustments
 
-        return viewport
+        return large_bbox
 
     def get_warped_viewport(self):
-        viewport = self.get_viewport_from_bbox(self.bbox)
-
-        cropped = self.episode_image.crop(viewport)
+        cropped = self.episode_image.crop(self.bbox)
         return cropped.resize((224, 224), LANCZOS)
 
     def compute_state(self):
