@@ -303,7 +303,7 @@ class TextLocEnv(gym.Env):
         return cropped.resize((224, 224), LANCZOS)
 
     def compute_state(self):
-        penalty = self.current_step * self.DURATION_PENALTY
+        penalty = np.float32(self.current_step * self.DURATION_PENALTY)
 
         if self.gpu_id != -1:
             return np.concatenate((cuda.to_cpu(self.extract_features().array), np.array(self.history).flatten(), np.array([penalty])))
