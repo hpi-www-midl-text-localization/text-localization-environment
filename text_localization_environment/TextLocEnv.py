@@ -277,12 +277,12 @@ class TextLocEnv(gym.Env):
         self.episode_true_bboxes = self.true_bboxes[random_index]
 
         self.bbox = np.array([0, 0, self.episode_image.width, self.episode_image.height])
+        self.current_step = 0
         self.state = self.compute_state()
         self.done = False
         self.iou = self.compute_best_iou()
         self.max_iou = self.iou
         self.steps_since_last_change = 0
-        self.current_step = 0
 
         return self.state
 
