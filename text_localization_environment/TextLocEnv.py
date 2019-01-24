@@ -11,6 +11,7 @@ from text_localization_environment.ImageMasker import ImageMasker
 
 class TextLocEnv(gym.Env):
 
+    DURATION_PENALTY = 0.02
     HISTORY_LENGTH = 10
     # ⍺: factor relative to the current box size that is used for every transformation action
     ALPHA = 0.2
@@ -64,6 +65,8 @@ class TextLocEnv(gym.Env):
             info - any additional info"""
         assert self.action_space.contains(action), "%r (%s) is an invalid action" % (action, type(action))
 
+        self.current_step += 1
+
         self.action_set[action]()
 
         reward = self.calculate_reward(action)
@@ -100,7 +103,7 @@ class TextLocEnv(gym.Env):
 
             self.iou = new_iou
 
-        return reward
+        return reward - self.current_step * self.DURATION_PENALTY
 
     def calculate_potential_reward(self, action):
         old_bbox = self.bbox
@@ -280,6 +283,7 @@ class TextLocEnv(gym.Env):
 
         # TODO Implement custom reset behavior for when stay_on_image is set to true
         self.bbox = np.array([0, 0, self.episode_image.width, self.episode_image.height])
+        self.current_step = 0
         self.state = self.compute_state()
         self.done = False
         self.iou = self.compute_best_iou()
@@ -305,10 +309,12 @@ class TextLocEnv(gym.Env):
         return cropped.resize((224, 224), LANCZOS)
 
     def compute_state(self):
+        penalty = np.float32(self.current_step * self.DURATION_PENALTY)
+
         if self.gpu_id != -1:
-            return np.concatenate((cuda.to_cpu(self.extract_features().array), np.array(self.history).flatten()))
+            return np.concatenate((cuda.to_cpu(self.extract_features().array), np.array(self.history).flatten(), np.array([penalty])))
         else:
-            return np.concatenate((self.extract_features().array, np.array(self.history).flatten()))
+            return np.concatenate((self.extract_features().array, np.array(self.history).flatten(), np.array([penalty])))
 
     def extract_features(self):
         """Extract features from the image using the VGG16 network"""
