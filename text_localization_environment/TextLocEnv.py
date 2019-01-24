@@ -261,18 +261,24 @@ class TextLocEnv(gym.Env):
         if self.box_size(new_box) < MAX_IMAGE_PIXELS:
             self.bbox = new_box
 
-    def reset(self):
+    def reset(self, image_index=None, stay_on_image=False):
         """Reset the environment to its initial state (the bounding box covers the entire image"""
-        self.history = self.create_empty_history()
+        if not stay_on_image:
+            self.history = self.create_empty_history()
 
-        random_index = self.np_random.randint(len(self.image_paths))
-        self.episode_image = Image.open(self.image_paths[random_index])
+        if image_index is not None:
+            if not stay_on_image:
+                self.episode_image = Image.open(self.image_paths[image_index])
+                self.episode_true_bboxes = self.true_bboxes[image_index]
+        else:
+            random_index = self.np_random.randint(len(self.image_paths))
+            self.episode_image = Image.open(self.image_paths[random_index])
+            self.episode_true_bboxes = self.true_bboxes[random_index]
 
         if self.episode_image.mode != 'RGB':
             self.episode_image = self.episode_image.convert('RGB')
 
-        self.episode_true_bboxes = self.true_bboxes[random_index]
-
+        # TODO Implement custom reset behavior for when stay_on_image is set to true
         self.bbox = np.array([0, 0, self.episode_image.width, self.episode_image.height])
         self.state = self.compute_state()
         self.done = False
