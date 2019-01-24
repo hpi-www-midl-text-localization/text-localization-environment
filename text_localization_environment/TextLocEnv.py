@@ -11,7 +11,7 @@ from text_localization_environment.ImageMasker import ImageMasker
 
 class TextLocEnv(gym.Env):
 
-    ENLARGEMENT_FACTOR = 1.25
+    ENLARGEMENT_FACTOR = 1.1
     HISTORY_LENGTH = 10
     # ⍺: factor relative to the current box size that is used for every transformation action
     ALPHA = 0.2
@@ -68,6 +68,7 @@ class TextLocEnv(gym.Env):
         self.action_set[action]()
 
         reward = self.calculate_reward(action)
+        self.iou = self.compute_best_iou(self.episode_true_bboxes)
         self.max_iou = max(self.iou, self.max_iou)
 
         self.history.insert(0, self.to_one_hot(action))
@@ -83,13 +84,13 @@ class TextLocEnv(gym.Env):
         reward = 0
 
         if self.action_set[action] == self.trigger:
-            if self.iou >= self.TAU:
+            if self.internal_iou >= self.TAU:
                 reward = self.ETA
             else:
                 reward = -self.ETA
         else:
-            new_iou = self.compute_best_iou()
-            reward = np.sign(new_iou - self.iou)
+            new_iou = self.compute_best_iou(self.episode_true_bboxes_internal)
+            reward = np.sign(new_iou - self.internal_iou)
 
             if reward == 0:
                 self.steps_since_last_change += 1
@@ -99,13 +100,13 @@ class TextLocEnv(gym.Env):
             if self.steps_since_last_change >= 3:
                 reward = -1
 
-            self.iou = new_iou
+            self.internal_iou = new_iou
 
         return reward
 
     def calculate_potential_reward(self, action):
         old_bbox = self.bbox
-        old_iou = self.iou
+        old_iou = self.internal_iou
 
         if self.action_set[action] != self.trigger:
             self.action_set[action]()
@@ -113,7 +114,7 @@ class TextLocEnv(gym.Env):
         reward = self.calculate_reward(action)
 
         self.bbox = old_bbox
-        self.iou = old_iou
+        self.internal_iou = old_iou
 
         return reward
 
@@ -186,10 +187,10 @@ class TextLocEnv(gym.Env):
         else:
             self.episode_image = Image.fromarray(new_img.astype(np.uint8))
 
-    def compute_best_iou(self):
+    def compute_best_iou(self, true_bboxes):
         max_iou = 0
 
-        for box in self.episode_true_bboxes:
+        for box in true_bboxes:
             max_iou = max(max_iou, self.compute_iou(box))
 
         return max_iou
@@ -273,11 +274,16 @@ class TextLocEnv(gym.Env):
             self.episode_image = self.episode_image.convert('RGB')
 
         self.episode_true_bboxes = self.true_bboxes[random_index]
+        self.episode_true_bboxes_internal = np.empty(self.episode_true_bboxes.shape, dtype=np.int32)
 
-        self.bbox = self.get_enlarged_bbox(np.array([0, 0, self.episode_image.width, self.episode_image.height]))
+        for i in range(len(self.episode_true_bboxes_internal)):
+            self.episode_true_bboxes_internal[i] = self.get_enlarged_bbox(self.episode_true_bboxes[i])
+
+        self.bbox = np.array([0, 0, self.episode_image.width, self.episode_image.height])
         self.state = self.compute_state()
         self.done = False
-        self.iou = self.compute_best_iou()
+        self.internal_iou = self.compute_best_iou(self.episode_true_bboxes_internal)
+        self.iou = self.compute_best_iou(self.episode_true_bboxes)
         self.max_iou = self.iou
         self.steps_since_last_change = 0
 
@@ -296,10 +302,10 @@ class TextLocEnv(gym.Env):
             warped.show()
 
     def get_enlarged_bbox(self, bbox):
-        delta_h = round((self.ENLARGEMENT_FACTOR - 1.0) * (bbox[3] - bbox[1]))
-        delta_w = round((self.ENLARGEMENT_FACTOR - 1.0) * (bbox[2] - bbox[0]))
+        delta_h = round((self.ENLARGEMENT_FACTOR - 1.0) * (bbox[1][1] - bbox[0][1]))
+        delta_w = round((self.ENLARGEMENT_FACTOR - 1.0) * (bbox[1][0] - bbox[0][0]))
 
-        adjustments = np.array([-delta_w, -delta_h, delta_w, delta_h])
+        adjustments = np.array([-delta_w, -delta_h, delta_w, delta_h]).reshape((2, 2))
         large_bbox = bbox + adjustments
 
         return large_bbox
