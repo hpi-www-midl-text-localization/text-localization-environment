@@ -12,7 +12,7 @@ from text_localization_environment.ImageMasker import ImageMasker
 class TextLocEnv(gym.Env):
 
     ENLARGEMENT_FACTOR = 1.1
-    DURATION_PENALTY = 0.02
+    DURATION_PENALTY = 0.03
     HISTORY_LENGTH = 10
     # ⍺: factor relative to the current box size that is used for every transformation action
     ALPHA = 0.2
