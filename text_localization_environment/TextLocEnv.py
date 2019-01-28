@@ -87,18 +87,25 @@ class TextLocEnv(gym.Env):
             else:
                 reward = -self.ETA
         else:
-            new_iou = self.compute_best_iou()
-            reward = np.sign(new_iou - self.iou)
+            new_iou, box = self.compute_best_iou()
 
-            if reward == 0:
+            env_box_center = np.array(self.bbox[:2]) + (np.array(self.bbox[2:]) - np.array(self.bbox[:2]))/2
+            text_box_center = np.array(self.episode_true_bboxes[box][0]) + \
+                              (np.array(self.episode_true_bboxes[box][1]) - np.array(self.episode_true_bboxes[box][0]))/2
+            new_center_distance = np.linalg.norm(env_box_center - text_box_center)
+        
+            reward = np.sign(new_iou - self.iou) + np.sign(self.center_distance - new_center_distance)/2
+
+            if new_iou == self.iou:
                 self.steps_since_last_change += 1
             else:
                 self.steps_since_last_change = 0
 
             if self.steps_since_last_change >= 3:
-                reward = -1
+                reward -= -1
 
             self.iou = new_iou
+            self.center_distance = new_center_distance
 
         return reward
 
@@ -187,11 +194,20 @@ class TextLocEnv(gym.Env):
 
     def compute_best_iou(self):
         max_iou = 0
+        max_i = -1
+        i = -1
 
         for box in self.episode_true_bboxes:
-            max_iou = max(max_iou, self.compute_iou(box))
+            i += 1
+            candidate_iou = self.compute_iou(box)
+            if candidate_iou >= max_iou:
+                max_i = i
+                max_iou = candidate_iou
 
-        return max_iou
+        if max_i == -1:
+            raise ValueError("There is a problem in compute_best_iou")
+
+        return max_iou, max_i
 
     def compute_iou(self, other_bbox):
         """Computes the intersection over union of the argument and the current bounding box."""
@@ -276,7 +292,7 @@ class TextLocEnv(gym.Env):
         self.bbox = np.array([0, 0, self.episode_image.width, self.episode_image.height])
         self.state = self.compute_state()
         self.done = False
-        self.iou = self.compute_best_iou()
+        self.iou = self.compute_best_iou()[0]
         self.max_iou = self.iou
         self.steps_since_last_change = 0
 
