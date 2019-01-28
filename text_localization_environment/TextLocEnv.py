@@ -17,7 +17,7 @@ class TextLocEnv(gym.Env):
     # τ: Threshold of intersection over union for the trigger action to yield a positive reward
     TAU = 0.6
     # η: Reward of the trigger action
-    ETA = 3.0
+    ETA = 10.0
 
     def __init__(self, image_paths, true_bboxes, gpu_id=-1):
         """
@@ -67,6 +67,7 @@ class TextLocEnv(gym.Env):
         self.action_set[action]()
 
         reward = self.calculate_reward(action)
+        self.max_iou = max(self.iou, self.max_iou)
 
         self.history.insert(0, self.to_one_hot(action))
         self.history.pop()
@@ -292,7 +293,7 @@ class TextLocEnv(gym.Env):
         self.state = self.compute_state()
         self.done = False
         self.iou = self.compute_best_iou()[0]
-
+        self.max_iou = self.iou
         self.steps_since_last_change = 0
 
         return self.state
