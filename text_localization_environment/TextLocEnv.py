@@ -10,6 +10,7 @@ from text_localization_environment.ImageMasker import ImageMasker
 
 
 class TextLocEnv(gym.Env):
+    metadata = {'render.modes': ['human', 'rgb_array', 'box']}
 
     ENLARGEMENT_FACTOR = 1.1
     DURATION_PENALTY = 0.03
@@ -300,17 +301,28 @@ class TextLocEnv(gym.Env):
 
         return self.state
 
-    def render(self, mode='human'):
+    def render(self, mode='rgb_array', return_as_file=False):
         """Render the current state"""
 
         if mode == 'human':
             copy = self.episode_image.copy()
             draw = ImageDraw.Draw(copy)
             draw.rectangle(self.bbox.tolist(), outline=(255, 255, 255))
+            if return_as_file:
+                return copy
             copy.show()
-        elif mode == 'box':
+        elif mode is 'box':
             warped = self.get_warped_viewport()
+            if return_as_file:
+                return warped
             warped.show()
+        elif mode is 'rgb_array':
+            copy = self.episode_image.copy()
+            draw = ImageDraw.Draw(copy)
+            draw.rectangle(self.bbox.tolist(), outline=(255, 255, 255))
+            return np.array(copy)
+        else:
+            super(TextLocEnv, self).render(mode=mode)
 
     def get_enlarged_bbox(self, bbox):
         delta_h = round((self.ENLARGEMENT_FACTOR - 1.0) * (bbox[1][1] - bbox[0][1]))
