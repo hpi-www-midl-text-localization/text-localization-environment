@@ -11,6 +11,7 @@ from text_localization_environment.ImageMasker import ImageMasker
 
 class TextLocEnv(gym.Env):
 
+    DURATION_PENALTY = 0.03
     HISTORY_LENGTH = 10
     # ⍺: factor relative to the current box size that is used for every transformation action
     ALPHA = 0.2
@@ -64,6 +65,8 @@ class TextLocEnv(gym.Env):
             info - any additional info"""
         assert self.action_space.contains(action), "%r (%s) is an invalid action" % (action, type(action))
 
+        self.current_step += 1
+
         self.action_set[action]()
 
         reward = self.calculate_reward(action)
@@ -91,9 +94,10 @@ class TextLocEnv(gym.Env):
 
             env_box_center = np.array(self.bbox[:2]) + (np.array(self.bbox[2:]) - np.array(self.bbox[:2]))/2
             text_box_center = np.array(self.episode_true_bboxes[box][0]) + \
-                              (np.array(self.episode_true_bboxes[box][1]) - np.array(self.episode_true_bboxes[box][0]))/2
+                              (np.array(self.episode_true_bboxes[box][1]) - np.array(
+                                  self.episode_true_bboxes[box][0])) / 2
             new_center_distance = np.linalg.norm(env_box_center - text_box_center)
-        
+
             reward = np.sign(new_iou - self.iou) + np.sign(self.center_distance - new_center_distance)/2
 
             if new_iou == self.iou:
@@ -102,16 +106,17 @@ class TextLocEnv(gym.Env):
                 self.steps_since_last_change = 0
 
             if self.steps_since_last_change >= 3:
-                reward -= -1
+                reward -= 1
 
             self.iou = new_iou
             self.center_distance = new_center_distance
 
-        return reward
+        return reward - self.current_step * self.DURATION_PENALTY
 
     def calculate_potential_reward(self, action):
         old_bbox = self.bbox
         old_iou = self.iou
+        old_center_distance = self.center_distance
 
         if self.action_set[action] != self.trigger:
             self.action_set[action]()
@@ -120,6 +125,7 @@ class TextLocEnv(gym.Env):
 
         self.bbox = old_bbox
         self.iou = old_iou
+        self.center_distance = old_center_distance
 
         return reward
 
@@ -290,9 +296,16 @@ class TextLocEnv(gym.Env):
         self.episode_true_bboxes = self.true_bboxes[random_index]
 
         self.bbox = np.array([0, 0, self.episode_image.width, self.episode_image.height])
+        self.current_step = 0
         self.state = self.compute_state()
         self.done = False
-        self.iou = self.compute_best_iou()[0]
+        self.iou, box = self.compute_best_iou()
+
+        env_box_center = np.array(self.bbox[:2]) + (np.array(self.bbox[2:]) - np.array(self.bbox[:2])) / 2
+        text_box_center = np.array(self.episode_true_bboxes[box][0]) + \
+                          (np.array(self.episode_true_bboxes[box][1]) - np.array(
+                              self.episode_true_bboxes[box][0])) / 2
+        self.center_distance = np.linalg.norm(env_box_center - text_box_center)
         self.max_iou = self.iou
         self.steps_since_last_change = 0
 
@@ -315,10 +328,12 @@ class TextLocEnv(gym.Env):
         return cropped.resize((224, 224), LANCZOS)
 
     def compute_state(self):
+        penalty = np.float32(self.current_step * self.DURATION_PENALTY)
+
         if self.gpu_id != -1:
-            return np.concatenate((cuda.to_cpu(self.extract_features().array), np.array(self.history).flatten()))
+            return np.concatenate((cuda.to_cpu(self.extract_features().array), np.array(self.history).flatten(), np.array([penalty])))
         else:
-            return np.concatenate((self.extract_features().array, np.array(self.history).flatten()))
+            return np.concatenate((self.extract_features().array, np.array(self.history).flatten(), np.array([penalty])))
 
     def extract_features(self):
         """Extract features from the image using the VGG16 network"""
