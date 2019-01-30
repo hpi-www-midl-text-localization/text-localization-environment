@@ -12,13 +12,14 @@ from text_localization_environment.LimitingDiscreteSpace import LimitingDiscrete
 
 class TextLocEnv(gym.Env):
 
+    DURATION_PENALTY = 0.03
     HISTORY_LENGTH = 10
     # ⍺: factor relative to the current box size that is used for every transformation action
     ALPHA = 0.2
     # τ: Threshold of intersection over union for the trigger action to yield a positive reward
     TAU = 0.6
     # η: Reward of the trigger action
-    ETA = 3.0
+    ETA = 10.0
 
     def __init__(self, image_paths, true_bboxes, gpu_id=-1, training_phase=True):
         """
@@ -70,9 +71,12 @@ class TextLocEnv(gym.Env):
             done - whether a terminal state was reached,
             info - any additional info"""
 
+        self.current_step += 1
+
         self.action_set[action]()
 
         reward = self.calculate_reward(action)
+        self.max_iou = max(self.iou, self.max_iou)
 
         self.history.insert(0, self.to_one_hot(action))
         self.history.pop()
@@ -108,7 +112,7 @@ class TextLocEnv(gym.Env):
 
             self.iou = new_iou
 
-        return reward
+        return reward - self.current_step * self.DURATION_PENALTY
 
     def calculate_potential_reward(self, action):
         old_bbox = self.bbox
@@ -282,9 +286,11 @@ class TextLocEnv(gym.Env):
         self.episode_true_bboxes = self.true_bboxes[random_index]
 
         self.bbox = np.array([0, 0, self.episode_image.width, self.episode_image.height])
+        self.current_step = 0
         self.state = self.compute_state()
         self.done = False
         self.iou = self.compute_best_iou()
+        self.max_iou = self.iou
         self.steps_since_last_change = 0
 
         if self.training_phase:
@@ -309,10 +315,12 @@ class TextLocEnv(gym.Env):
         return cropped.resize((224, 224), LANCZOS)
 
     def compute_state(self):
+        penalty = np.float32(self.current_step * self.DURATION_PENALTY)
+
         if self.gpu_id != -1:
-            return np.concatenate((cuda.to_cpu(self.extract_features().array), np.array(self.history).flatten()))
+            return np.concatenate((cuda.to_cpu(self.extract_features().array), np.array(self.history).flatten(), np.array([penalty])))
         else:
-            return np.concatenate((self.extract_features().array, np.array(self.history).flatten()))
+            return np.concatenate((self.extract_features().array, np.array(self.history).flatten(), np.array([penalty])))
 
     def extract_features(self):
         """Extract features from the image using the VGG16 network"""
