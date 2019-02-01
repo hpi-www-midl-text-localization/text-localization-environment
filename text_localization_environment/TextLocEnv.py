@@ -1,7 +1,7 @@
 import gym
 from gym import spaces
 from gym.utils import seeding
-from chainer.links import VGG16Layers
+from chainer.links import ResNet152Layers
 from chainer.backends import cuda
 from PIL import Image, ImageDraw
 from PIL.Image import LANCZOS, MAX_IMAGE_PIXELS
@@ -11,7 +11,7 @@ from text_localization_environment.ImageMasker import ImageMasker
 
 class TextLocEnv(gym.Env):
 
-    DURATION_PENALTY = 0.02
+    DURATION_PENALTY = 0.03
     HISTORY_LENGTH = 10
     # ⍺: factor relative to the current box size that is used for every transformation action
     ALPHA = 0.2
@@ -29,7 +29,7 @@ class TextLocEnv(gym.Env):
         :type true_bboxes: numpy.ndarray
         :type gpu_id: int
         """
-        self.feature_extractor = VGG16Layers()
+        self.feature_extractor = ResNet152Layers()
         self.action_space = spaces.Discrete(9)
         self.action_set = {0: self.right,
                            1: self.left,
@@ -317,9 +317,9 @@ class TextLocEnv(gym.Env):
             return np.concatenate((self.extract_features().array, np.array(self.history).flatten(), np.array([penalty])))
 
     def extract_features(self):
-        """Extract features from the image using the VGG16 network"""
+        """Extract features from the image using ResNet with 152 layers"""
         warped = self.get_warped_bbox_contents()
-        feature = self.feature_extractor.extract([warped], layers=["fc7"])["fc7"]
+        feature = self.feature_extractor.extract([warped], layers=['pool5'])['pool5']
 
         return feature[0]
 
