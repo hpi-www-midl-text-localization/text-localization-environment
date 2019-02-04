@@ -14,9 +14,9 @@ class TextLocEnv(gym.Env):
     DURATION_PENALTY = 0.03
     HISTORY_LENGTH = 10
     # ⍺: factor relative to the current box size that is used for every transformation action
-    ALPHA = 0.2
+    ALPHA = 0.15
     # τ: Threshold of intersection over union for the trigger action to yield a positive reward
-    TAU = 0.6
+    TAU = 0.75
     # η: Reward of the trigger action
     ETA = 10.0
 
