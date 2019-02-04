@@ -51,6 +51,8 @@ class TextLocEnv(gym.Env):
             self.feature_extractor.to_gpu(self.gpu_id)
 
         self.seed()
+
+        self.episode_image = Image.new("RGB", (256, 256))
         self.reset()
 
     def seed(self, seed=None):
@@ -269,6 +271,8 @@ class TextLocEnv(gym.Env):
         self.history = self.create_empty_history()
 
         random_index = self.np_random.randint(len(self.image_paths))
+
+        self.episode_image.close()
         self.episode_image = Image.open(self.image_paths[random_index])
 
         if self.episode_image.mode != 'RGB':
@@ -294,9 +298,11 @@ class TextLocEnv(gym.Env):
             draw = ImageDraw.Draw(copy)
             draw.rectangle(self.bbox.tolist(), outline=(255, 255, 255))
             copy.show()
+            copy.close()
         elif mode == 'box':
             warped = self.get_warped_bbox_contents()
             warped.show()
+            warped.close()
 
     def get_warped_bbox_contents(self):
         cropped = self.episode_image.crop(self.bbox)
@@ -314,6 +320,8 @@ class TextLocEnv(gym.Env):
         """Extract features from the image using ResNet with 152 layers"""
         warped = self.get_warped_bbox_contents()
         feature = self.feature_extractor.extract([warped], layers=['pool5'])['pool5']
+
+        warped.close()
 
         return feature[0]
 
