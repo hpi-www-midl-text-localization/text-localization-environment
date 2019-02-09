@@ -1,7 +1,7 @@
 import gym
 from gym import spaces
 from gym.utils import seeding
-from chainer.links import VGG16Layers
+from chainer.links import ResNet152Layers
 from chainer.backends import cuda
 from PIL import Image, ImageDraw
 from PIL.Image import LANCZOS, MAX_IMAGE_PIXELS
@@ -29,7 +29,7 @@ class TextLocEnv(gym.Env):
         :type true_bboxes: numpy.ndarray
         :type gpu_id: int
         """
-        self.feature_extractor = VGG16Layers()
+        self.feature_extractor = ResNet152Layers()
         self.action_space = spaces.Discrete(9)
         self.action_set = {0: self.right,
                            1: self.left,
@@ -51,6 +51,8 @@ class TextLocEnv(gym.Env):
             self.feature_extractor.to_gpu(self.gpu_id)
 
         self.seed()
+
+        self.episode_image = Image.new("RGB", (256, 256))
         self.reset()
 
     def seed(self, seed=None):
@@ -269,6 +271,8 @@ class TextLocEnv(gym.Env):
         self.history = self.create_empty_history()
 
         random_index = self.np_random.randint(len(self.image_paths))
+
+        self.episode_image.close()
         self.episode_image = Image.open(self.image_paths[random_index])
 
         if self.episode_image.mode != 'RGB':
@@ -294,9 +298,11 @@ class TextLocEnv(gym.Env):
             draw = ImageDraw.Draw(copy)
             draw.rectangle(self.bbox.tolist(), outline=(255, 255, 255))
             copy.show()
+            copy.close()
         elif mode == 'box':
             warped = self.get_warped_bbox_contents()
             warped.show()
+            warped.close()
 
     def get_warped_bbox_contents(self):
         cropped = self.episode_image.crop(self.bbox)
@@ -311,9 +317,11 @@ class TextLocEnv(gym.Env):
             return np.concatenate((self.extract_features().array, np.array(self.history).flatten(), np.array([penalty])))
 
     def extract_features(self):
-        """Extract features from the image using the VGG16 network"""
+        """Extract features from the image using ResNet with 152 layers"""
         warped = self.get_warped_bbox_contents()
-        feature = self.feature_extractor.extract([warped], layers=["fc7"])["fc7"]
+        feature = self.feature_extractor.extract([warped], layers=['pool5'])['pool5']
+
+        warped.close()
 
         return feature[0]
 
