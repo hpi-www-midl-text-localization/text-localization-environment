@@ -294,7 +294,7 @@ class TextLocEnv(gym.Env):
 
         return self.state
 
-    def render(self, mode='rgb_array', return_as_file=False):
+    def render(self, mode='human', return_as_file=False):
         """Render the current state"""
 
         if mode == 'human':
