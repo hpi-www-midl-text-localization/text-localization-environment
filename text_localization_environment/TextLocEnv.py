@@ -324,7 +324,7 @@ class TextLocEnv(gym.Env):
         penalty = np.float32(self.current_step * self.DURATION_PENALTY)
         history = np.array(self.history, dtype=np.float32).flatten()
 
-        return image_array  # , history
+        return image_array  # Current network architecture does not allow for history and penalty to be included
 
     def to_one_hot(self, action):
         line = np.zeros(self.action_space.n, np.bool)
