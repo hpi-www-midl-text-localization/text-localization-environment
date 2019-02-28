@@ -10,6 +10,7 @@ from text_localization_environment.ImageMasker import ImageMasker
 
 
 class TextLocEnv(gym.Env):
+    metadata = {'render.modes': ['human', 'rgb_array', 'box']}
 
     DURATION_PENALTY = 0.03
     HISTORY_LENGTH = 10
@@ -266,19 +267,22 @@ class TextLocEnv(gym.Env):
         if self.box_size(new_box) < MAX_IMAGE_PIXELS:
             self.bbox = new_box
 
-    def reset(self):
+    def reset(self, image_index=None):
         """Reset the environment to its initial state (the bounding box covers the entire image"""
         self.history = self.create_empty_history()
 
-        random_index = self.np_random.randint(len(self.image_paths))
-
         self.episode_image.close()
-        self.episode_image = Image.open(self.image_paths[random_index])
+
+        if image_index is not None:
+            self.episode_image = Image.open(self.image_paths[image_index])
+            self.episode_true_bboxes = self.true_bboxes[image_index]
+        else:
+            random_index = self.np_random.randint(len(self.image_paths))
+            self.episode_image = Image.open(self.image_paths[random_index])
+            self.episode_true_bboxes = self.true_bboxes[random_index]
 
         if self.episode_image.mode != 'RGB':
             self.episode_image = self.episode_image.convert('RGB')
-
-        self.episode_true_bboxes = self.true_bboxes[random_index]
 
         self.bbox = np.array([0, 0, self.episode_image.width, self.episode_image.height])
         self.current_step = 0
@@ -290,19 +294,30 @@ class TextLocEnv(gym.Env):
 
         return self.state
 
-    def render(self, mode='human'):
+    def render(self, mode='human', return_as_file=False):
         """Render the current state"""
 
         if mode == 'human':
             copy = self.episode_image.copy()
             draw = ImageDraw.Draw(copy)
             draw.rectangle(self.bbox.tolist(), outline=(255, 255, 255))
+            if return_as_file:
+                return copy
             copy.show()
             copy.close()
-        elif mode == 'box':
+        elif mode is 'box':
             warped = self.get_warped_bbox_contents()
+            if return_as_file:
+                return warped
             warped.show()
             warped.close()
+        elif mode is 'rgb_array':
+            copy = self.episode_image.copy()
+            draw = ImageDraw.Draw(copy)
+            draw.rectangle(self.bbox.tolist(), outline=(255, 255, 255))
+            return np.array(copy)
+        else:
+            super(TextLocEnv, self).render(mode=mode)
 
     def get_warped_bbox_contents(self):
         cropped = self.episode_image.crop(self.bbox)
