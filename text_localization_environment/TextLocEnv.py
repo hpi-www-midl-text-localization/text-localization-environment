@@ -9,7 +9,9 @@ from text_localization_environment.ImageMasker import ImageMasker
 
 
 class TextLocEnv(gym.Env):
+    metadata = {'render.modes': ['human', 'rgb_array', 'box']}
 
+    DURATION_PENALTY = 0.03
     HISTORY_LENGTH = 10
     # ⍺: factor relative to the current box size that is used for every transformation action
     ALPHA = 0.2
@@ -45,6 +47,8 @@ class TextLocEnv(gym.Env):
         self.true_bboxes = true_bboxes
 
         self.seed()
+
+        self.episode_image = Image.new("RGB", (256, 256))
         self.reset()
 
     def seed(self, seed=None):
@@ -58,6 +62,8 @@ class TextLocEnv(gym.Env):
             done - whether a terminal state was reached,
             info - any additional info"""
         assert self.action_space.contains(action), "%r (%s) is an invalid action" % (action, type(action))
+
+        self.current_step += 1
 
         self.action_set[action]()
 
@@ -95,7 +101,7 @@ class TextLocEnv(gym.Env):
 
             self.iou = new_iou
 
-        return reward
+        return reward - self.current_step * self.DURATION_PENALTY
 
     def calculate_potential_reward(self, action):
         old_bbox = self.bbox
@@ -256,19 +262,25 @@ class TextLocEnv(gym.Env):
         if self.box_size(new_box) < MAX_IMAGE_PIXELS:
             self.bbox = new_box
 
-    def reset(self):
+    def reset(self, image_index=None):
         """Reset the environment to its initial state (the bounding box covers the entire image"""
         self.history = self.create_empty_history()
 
-        random_index = self.np_random.randint(len(self.image_paths))
-        self.episode_image = Image.open(self.image_paths[random_index])
+        self.episode_image.close()
+
+        if image_index is not None:
+            self.episode_image = Image.open(self.image_paths[image_index])
+            self.episode_true_bboxes = self.true_bboxes[image_index]
+        else:
+            random_index = self.np_random.randint(len(self.image_paths))
+            self.episode_image = Image.open(self.image_paths[random_index])
+            self.episode_true_bboxes = self.true_bboxes[random_index]
 
         if self.episode_image.mode != 'RGB':
             self.episode_image = self.episode_image.convert('RGB')
 
-        self.episode_true_bboxes = self.true_bboxes[random_index]
-
         self.bbox = np.array([0, 0, self.episode_image.width, self.episode_image.height])
+        self.current_step = 0
         self.state = self.compute_state()
         self.done = False
         self.iou = self.compute_best_iou()
@@ -277,24 +289,39 @@ class TextLocEnv(gym.Env):
 
         return self.state
 
-    def render(self, mode='human'):
+    def render(self, mode='human', return_as_file=False):
         """Render the current state"""
 
         if mode == 'human':
             copy = self.episode_image.copy()
             draw = ImageDraw.Draw(copy)
             draw.rectangle(self.bbox.tolist(), outline=(255, 255, 255))
+            if return_as_file:
+                return copy
             copy.show()
-        elif mode == 'box':
+            copy.close()
+        elif mode is 'box':
             warped = self.get_warped_bbox_contents()
+            if return_as_file:
+                return warped
             warped.show()
+            warped.close()
+        elif mode is 'rgb_array':
+            copy = self.episode_image.copy()
+            draw = ImageDraw.Draw(copy)
+            draw.rectangle(self.bbox.tolist(), outline=(255, 255, 255))
+            return np.array(copy)
+        else:
+            super(TextLocEnv, self).render(mode=mode)
 
     def get_warped_bbox_contents(self):
         cropped = self.episode_image.crop(self.bbox)
         return cropped.resize((224, 224), LANCZOS)
 
     def compute_state(self):
+
         image_array = np.array(self.get_warped_bbox_contents(), dtype=np.float32).transpose((2, 0, 1))
+        penalty = np.float32(self.current_step * self.DURATION_PENALTY)
         history = np.array(self.history, dtype=np.float32).flatten()
 
         return image_array  # , history
