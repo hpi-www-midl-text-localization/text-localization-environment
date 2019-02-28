@@ -10,6 +10,7 @@ from text_localization_environment.ImageMasker import ImageMasker
 
 
 class TextLocEnv(gym.Env):
+    metadata = {'render.modes': ['human', 'rgb_array', 'box']}
 
     DURATION_PENALTY = 0.03
     HISTORY_LENGTH = 10
@@ -51,6 +52,8 @@ class TextLocEnv(gym.Env):
             self.feature_extractor.to_gpu(self.gpu_id)
 
         self.seed()
+
+        self.episode_image = Image.new("RGB", (256, 256))
         self.reset()
 
     def seed(self, seed=None):
@@ -268,6 +271,7 @@ class TextLocEnv(gym.Env):
         """Reset the environment to its initial state (the bounding box covers the entire image"""
         if not stay_on_image:
             self.history = self.create_empty_history()
+            self.episode_image.close()
 
         if image_index is not None:
             if not stay_on_image:
@@ -281,7 +285,6 @@ class TextLocEnv(gym.Env):
         if self.episode_image.mode != 'RGB':
             self.episode_image = self.episode_image.convert('RGB')
 
-        # TODO Implement custom reset behavior for when stay_on_image is set to true
         self.bbox = np.array([0, 0, self.episode_image.width, self.episode_image.height])
         self.current_step = 0
         self.state = self.compute_state()
@@ -292,17 +295,30 @@ class TextLocEnv(gym.Env):
 
         return self.state
 
-    def render(self, mode='human'):
+    def render(self, mode='human', return_as_file=False):
         """Render the current state"""
 
         if mode == 'human':
             copy = self.episode_image.copy()
             draw = ImageDraw.Draw(copy)
             draw.rectangle(self.bbox.tolist(), outline=(255, 255, 255))
+            if return_as_file:
+                return copy
             copy.show()
-        elif mode == 'box':
+            copy.close()
+        elif mode is 'box':
             warped = self.get_warped_bbox_contents()
+            if return_as_file:
+                return warped
             warped.show()
+            warped.close()
+        elif mode is 'rgb_array':
+            copy = self.episode_image.copy()
+            draw = ImageDraw.Draw(copy)
+            draw.rectangle(self.bbox.tolist(), outline=(255, 255, 255))
+            return np.array(copy)
+        else:
+            super(TextLocEnv, self).render(mode=mode)
 
     def get_warped_bbox_contents(self):
         cropped = self.episode_image.crop(self.bbox)
@@ -320,6 +336,8 @@ class TextLocEnv(gym.Env):
         """Extract features from the image using ResNet with 152 layers"""
         warped = self.get_warped_bbox_contents()
         feature = self.feature_extractor.extract([warped], layers=['pool5'])['pool5']
+
+        warped.close()
 
         return feature[0]
 
