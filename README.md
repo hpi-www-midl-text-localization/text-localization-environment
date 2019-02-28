@@ -26,6 +26,3 @@ To use the environment, call
 ```
 from text_localization_environment import TextLocEnv
 ```
-
-To download the ResNet-152 caffemodel (it isn't downloaded automatically) see [link](https://onedrive.live.com/?authkey=%21AAFW2-FVoxeVRck&id=4006CBB8476FF777%2117887&cid=4006CBB8476FF777)
-and save it where necessary (an error will tell you where if you try to create a TextLocEnv).
